@@ -32,6 +32,9 @@ from rich.progress import (
 )
 from requests.exceptions import ConnectionError, HTTPError, RequestException, Timeout
 
+load_dotenv()
+console = Console()
+logger = logging.getLogger(__name__)
 
 OUTDIR_DEFAULT = Path("./data/chessmet")
 VARS = ("dtr", "huss", "precip", "psurf", "rlds", "rsds", "sfcWind", "tas")
