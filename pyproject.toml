@@ -27,7 +27,7 @@ dev = [
 chessmet = "chessmet.cli:cli"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 
 [build-system]
 requires = ["setuptools>=77", "wheel"]
