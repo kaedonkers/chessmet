@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eidc-data"
+version = "1.0.0"
+description = "CLI tool to download CHESS-MET data from UKCEH EIDC"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "kaedonkers" }]
+dependencies = [
+  "click>=8.1.7",
+  "requests>=2.31.0",
+  "python-dotenv>=1.0.1",
+  "tqdm>=4.66.0",
+]
+
+[project.scripts]
+chess-dl = "chess_downloader.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["chess_downloader*"]

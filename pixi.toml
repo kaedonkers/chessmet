@@ -1,0 +1,14 @@
+[project]
+name = "eidc_data"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+
+[dependencies]
+python = ">=3.10"
+pip = "*"
+
+[pypi-dependencies]
+eidc-data = { path = ".", editable = true }
+
+[tasks]
+cli-help = "chess-dl --help"
