@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
 
-from chessmet.cli import ChessMetDownloader, ChessMetConfig, DownloadResult
+from chessmet.download import ChessMetDownloader, ChessMetConfig, DownloadResult
 
 @pytest.fixture
 def temp_dir(tmp_path):

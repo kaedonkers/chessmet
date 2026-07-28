@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 import concurrent.futures
-from chessmet.cli import (
+from chessmet.download import (
     ChessMetDownloader,
     ChessMetConfig,
     DownloadResult,

@@ -1,6 +1,6 @@
 """Test ChessMetConfig validation."""
 import pytest
-from chessmet.cli import ChessMetConfig, ChessMetDownloader, OUTDIR_DEFAULT, download
+from chessmet.download import ChessMetConfig, ChessMetDownloader, OUTDIR_DEFAULT
 
 def test_config_defaults():
     """Verify config defaults are reasonable."""
