@@ -10,6 +10,14 @@ dependencies = [
     "click",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "mypy",
+]
+
 [project.scripts]
 chessmet = "chessmet.cli:cli"
 
@@ -19,6 +27,20 @@ where = ["."]
 [build-system]
 requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
+
+# ============================================================================
+# Testing and Coverage Configuration
+# ============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+    "integration: marks integration tests (slow, requires network)",
+]
+
+[tool.coverage.run]
+source = ["src/chessmet_downloader"]
+omit = ["*/tests/*", "*/__main__.py"]
 
 # ============================================================================
 # Pixi Integration
@@ -36,3 +58,16 @@ chessmet = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 chessmet = "chessmet"
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+tests = { features = ["pytest"], solve-group = "default" }
+
+[tool.pixi.feature.pytest.dependencies]
+pytest = "*"
+pytest-cov = "*"
+black = "*"
+mypy = "*"
+
+[tool.pixi.feature.pytest.tasks]
+tests = "pytest tests"
