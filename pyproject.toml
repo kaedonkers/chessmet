@@ -1,0 +1,38 @@
+[project]
+name = "chessmet"
+authors = [{name = "Kevin Donkers", email = "k.donkers@exeter.ac.uk"}]
+requires-python = ">= 3.11"
+version = "0.1.0"
+dependencies = [
+    "requests",
+    "python-dotenv",
+    "rich",
+    "click",
+]
+
+[project.scripts]
+chessmet = "chessmet.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ============================================================================
+# Pixi Integration
+# ============================================================================
+# This section allows pixi to manage dependencies and environments
+# See: https://pixi.sh/latest/python/pyproject_toml/
+[tool.pixi.workspace]
+channels = ["conda-forge", "apple"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+
+[tool.pixi.dependencies]
+
+[tool.pixi.pypi-dependencies]
+chessmet = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+chessmet = "chessmet"
