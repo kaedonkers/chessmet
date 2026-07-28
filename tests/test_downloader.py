@@ -1,3 +1,8 @@
+# ---
+# created: 28 July 2026
+# author: Lumo2.0, kaedonkers
+# modified: 28 July 2026
+# ---
 """Test downloader functionality without hitting the real server."""
 import pytest
 from pathlib import Path
