@@ -97,10 +97,10 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
     # if some vars invalid: console.print(warning)
     # if *no* vars valid: console.print(error) and exit
     if start < config.min_year:
-        console.print(f"[bold orange1]WARNING:[/bold orange1] {start} < {config.min_year}: Starting download from {config.min_year}.")
+        console.print(f"[bold orange1]WARNING:[/bold orange1] {start} < {config.min_year}: Using start={config.min_year}")
         start = config.min_year
     if end > config.max_year:
-        console.print(f"[bold orange1]WARNING:[/bold orange1] {end} > {config.max_year}: Ending download at {config.max_year}.")
+        console.print(f"[bold orange1]WARNING:[/bold orange1] {end} > {config.max_year}: Using   end={config.max_year}")
         end = config.max_year
 
     console.print(f"[bold cyan]Downloading[/bold cyan] {', '.join(selected)} [dim]for[/dim] {start}–{end} [dim]→[/dim] {outdir}")
@@ -157,10 +157,10 @@ def status(ctx, vars_, start, end, outdir):
 
     config = ChessMetConfig(valid_vars=tuple(selected))
     if start < config.min_year:
-        console.print(f"[bold orange1]WARNING:[/bold orange1] {start} < {config.min_year}: Checking status from {config.min_year}.")
+        console.print(f"[bold orange1]WARNING:[/bold orange1] {start} < {config.min_year}: Checking status with start={config.min_year}")
         start = config.min_year
     if end > config.max_year:
-        console.print(f"[bold orange1]WARNING:[/bold orange1] {end} > {config.max_year}: Checking status up to {config.max_year}.")
+        console.print(f"[bold orange1]WARNING:[/bold orange1] {end} > {config.max_year}: Checking status with   end={config.max_year}")
         end = config.max_year
 
     dl = ChessMetDownloader(config=config)
