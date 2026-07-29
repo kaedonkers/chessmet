@@ -3,8 +3,9 @@
 # author: Lumo2.0, kaedonkers
 # modified: 28 July 2026
 # ---
-"""
-chessmet: 
-"""
+"""Module entry-point for `python -m chessmet`."""
 
-__version__ = "0.1.0"
+from .cli import cli
+
+if __name__ == "__main__":
+    cli()
