@@ -68,6 +68,13 @@ def cli(ctx, verbose):
     logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s", level=level, force=True)
     ctx.obj["log_level"] = level
 
+def _valid_vars(vars_: List[str]) -> List[str]:
+    """Validate selected variables against VARS."""
+    invalid = [v for v in vars_ if v not in VARS]
+    if invalid:
+        raise click.BadParameter(f"Invalid variable(s): {', '.join(invalid)}. Valid options: {', '.join(VARS)}")
+    return vars_
+
 @cli.command()
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
 @click.option("--start", type=int, default=None)
@@ -87,6 +94,8 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
     if not config.username or not config.password:
         console.print("[bold red]ERROR:[/bold red] EIDC credentials not found in .env file.")
         ctx.exit(1)
+    # if some vars invalid: console.print(warning)
+    # if *no* vars valid: console.print(error) and exit
     if start < config.min_year:
         console.print(f"[bold orange1]WARNING:[/bold orange1] {start} < {config.min_year}: Starting download from {config.min_year}.")
         start = config.min_year
