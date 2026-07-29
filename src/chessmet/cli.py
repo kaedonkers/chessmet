@@ -68,13 +68,6 @@ def cli(ctx, verbose):
     logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s", level=level, force=True)
     ctx.obj["log_level"] = level
 
-def _valid_vars(vars_: List[str]) -> List[str]:
-    """Validate selected variables against VARS."""
-    invalid = [v for v in vars_ if v not in VARS]
-    if invalid:
-        raise click.BadParameter(f"Invalid variable(s): {', '.join(invalid)}. Valid options: {', '.join(VARS)}")
-    return vars_
-
 @cli.command()
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
 @click.option("--start", type=int, default=None)
