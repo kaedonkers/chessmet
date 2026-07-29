@@ -87,7 +87,13 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
     if not config.username or not config.password:
         console.print("[bold red]ERROR:[/bold red] EIDC credentials not found in .env file.")
         ctx.exit(1)
-    
+    if start < config.min_year:
+        console.print(f"[bold orange1]WARNING:[/bold orange1] {start} < {config.min_year}: Starting download from {config.min_year}.")
+        start = config.min_year
+    if end > config.max_year:
+        console.print(f"[bold orange1]WARNING:[/bold orange1] {end} > {config.max_year}: Ending download at {config.max_year}.")
+        end = config.max_year
+
     console.print(f"[bold cyan]Downloading[/bold cyan] {', '.join(selected)} [dim]for[/dim] {start}–{end} [dim]→[/dim] {outdir}")
     
     if dry_run:
@@ -141,6 +147,13 @@ def status(ctx, vars_, start, end, outdir):
     end = end or YEARS[-1]
 
     config = ChessMetConfig(valid_vars=tuple(selected))
+    if start < config.min_year:
+        console.print(f"[bold orange1]WARNING:[/bold orange1] {start} < {config.min_year}: Checking status from {config.min_year}.")
+        start = config.min_year
+    if end > config.max_year:
+        console.print(f"[bold orange1]WARNING:[/bold orange1] {end} > {config.max_year}: Checking status up to {config.max_year}.")
+        end = config.max_year
+
     dl = ChessMetDownloader(config=config)
     
     missing, present, incomplete = 0, 0, 0

@@ -68,6 +68,26 @@ class ChessMetConfig:
     def password(self) -> Optional[str]:
         return os.getenv("EIDC_PASSWORD")
 
+    @property
+    def min_year(self) -> int:
+        return self.valid_years[0]
+
+    @property
+    def max_year(self) -> int:
+        return self.valid_years[1]
+
+    def validate_vars(self, var: str, start_year: int, end_year: int):
+        if var not in self.valid_vars:
+            raise ValueError(f"Variable '{var}' not in valid list {self.valid_vars}")
+
+    def validate_years(self, start_year: int, end_year: int):
+        if start_year > end_year:
+            raise ValueError(f"start_year ({start_year}) > end_year ({end_year})")
+        if start_year < self.min_year:
+            raise ValueError(f"start_year ({start_year}) before valid range (min: {self.min_year})")
+        if end_year > self.max_year:
+            raise ValueError(f"end_year ({end_year}) after valid range (max: {self.max_year})")
+
 @dataclass
 class DownloadResult:
     """Result of a single file download."""
