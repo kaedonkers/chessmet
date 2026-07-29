@@ -189,6 +189,7 @@ class ChessMetDownloader:
         var: str,
         urls_and_paths: List[Tuple[str, Path]],
         outdir: Path,
+        skip_existing: bool = True,
         grand_progress: Optional[Progress] = None,
         grand_task: Optional[int] = None,
     ) -> List[DownloadResult]:
@@ -211,7 +212,7 @@ class ChessMetDownloader:
             task = progress.add_task(f"[cyan]Downloading {var:<7}", total=total_files)
             
             for url, filepath in urls_and_paths:
-                if self._file_exists_locally(filepath):
+                if skip_existing and self._file_exists_locally(filepath):
                     progress.advance(task, advance=1)
                     if grand_progress and grand_task is not None:
                         grand_progress.update(grand_task, advance=1)
@@ -267,6 +268,7 @@ class ChessMetDownloader:
         grand_task: Optional[int] = None,
     ) -> List[DownloadResult]:
         """Parallel download with progress bar."""
+        # NB: skip_existing is handled in the download_var method before calling this function
         if not urls_and_paths:
             return []
         
@@ -346,7 +348,7 @@ class ChessMetDownloader:
         if parallel and num_workers > 1:
             return self.download_var_parallel(var, urls_and_paths, outdir, num_workers, grand_progress, grand_task)
         else:
-            return self.download_var_serial(var, urls_and_paths, outdir, grand_progress, grand_task)
+            return self.download_var_serial(var, urls_and_paths, outdir, skip_existing, grand_progress, grand_task)
     
     def download_all_vars(
         self,
