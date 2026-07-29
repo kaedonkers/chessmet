@@ -55,7 +55,7 @@ class ChessMetConfig:
     max_workers: int = 2
     chunk_size: int = 65536
     rate_limit_delay: float = float(os.getenv("RATE_LIMIT_DELAY", "3.0"))
-    default_outdir: str = OUTDIR_DEFAULT
+    default_outdir: Path = OUTDIR_DEFAULT
     max_retries: int = 3
     
     @property
