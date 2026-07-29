@@ -68,6 +68,26 @@ class ChessMetConfig:
     def password(self) -> Optional[str]:
         return os.getenv("EIDC_PASSWORD")
 
+    @property
+    def min_year(self) -> int:
+        return self.valid_years[0]
+
+    @property
+    def max_year(self) -> int:
+        return self.valid_years[1]
+
+    def validate_vars(self, var: str):
+        if var not in self.valid_vars:
+            raise ValueError(f"Variable '{var}' not in valid list {self.valid_vars}")
+
+    def validate_years(self, start_year: int, end_year: int):
+        if start_year > end_year:
+            raise ValueError(f"start_year ({start_year}) > end_year ({end_year})")
+        if start_year < self.min_year:
+            raise ValueError(f"start_year ({start_year}) before valid range (min: {self.min_year})")
+        if end_year > self.max_year:
+            raise ValueError(f"end_year ({end_year}) after valid range (max: {self.max_year})")
+
 @dataclass
 class DownloadResult:
     """Result of a single file download."""
@@ -318,17 +338,8 @@ class ChessMetDownloader:
         end_year = end_year or self.config.default_end_year
         
         # ─── VALIDATIONS ───────────────────────────────────────
-        if var not in self.config.valid_vars:
-            raise ValueError(f"Variable '{var}' not in valid list {self.config.valid_vars}")
-        
-        if start_year > end_year:
-            raise ValueError(f"start_year ({start_year}) > end_year ({end_year})")
-        
-        min_year, max_year = self.config.valid_years
-        if start_year < min_year:
-            raise ValueError(f"start_year ({start_year}) before valid range (min: {min_year})")
-        if end_year > max_year:
-            raise ValueError(f"end_year ({end_year}) after valid range (max: {max_year})")
+        self.config.validate_vars(var)
+        self.config.validate_years(start_year, end_year)
         # ────────────────────────────────────────────────────────
         
         urls_and_paths = []
