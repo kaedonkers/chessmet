@@ -44,7 +44,10 @@ from rich.progress import (
 from requests.exceptions import ConnectionError, HTTPError, RequestException, Timeout
 
 from chessmet import __version__
-from chessmet.download import OUTDIR_DEFAULT, VARS, YEARS, ChessMetConfig, ChessMetDownloader, DownloadResult
+from chessmet.download import (
+    OUTDIR_DEFAULT, VARS, YEARS, START_DEFAULT, END_DEFAULT,
+    ChessMetConfig, ChessMetDownloader, DownloadResult
+    )
 
 load_dotenv()
 console = Console()
@@ -77,13 +80,15 @@ def cli(ctx, verbose):
 def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
     """Download monthly NetCDF files for one or more variables."""
     selected = list(vars_) if vars_ else VARS
+    start = start or START_DEFAULT
+    end = end or END_DEFAULT
     
     config = ChessMetConfig(valid_vars=tuple(selected), max_workers=workers)
     if not config.username or not config.password:
         console.print("[bold red]ERROR:[/bold red] EIDC credentials not found in .env file.")
         ctx.exit(1)
     
-    console.print(f"[bold cyan]Downloading[/bold cyan] {', '.join(selected)} [dim]for[/dim] {start or 2000}–{end or 2000} [dim]→[/dim] {outdir}")
+    console.print(f"[bold cyan]Downloading[/bold cyan] {', '.join(selected)} [dim]for[/dim] {start}–{end} [dim]→[/dim] {outdir}")
     
     if dry_run:
         console.print("\n[yellow][DRY RUN][/yellow]")
@@ -132,12 +137,15 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
 def status(ctx, vars_, start, end, outdir):
     """Check which files exist locally vs. missing."""
     selected = list(vars_) if vars_ else VARS
+    start = start or START_DEFAULT
+    end = end or END_DEFAULT
+
     config = ChessMetConfig(valid_vars=tuple(selected))
     dl = ChessMetDownloader(config=config)
     
     missing, present, incomplete = 0, 0, 0
     for var in selected:
-        for year in range(start or 2000, (end or 2000) + 1):
+        for year in range(start or YEARS[0], (end or YEARS[-1]) + 1):
             for month in range(1, 13):
                 fp = dl._prepare_filepath(outdir, var, year, month)
                 if fp.exists():
@@ -148,7 +156,7 @@ def status(ctx, vars_, start, end, outdir):
                 else:
                     missing += 1
     
-    console.print(f"\n[bold green]{present}[/bold green] present ✓ | [yellow]{incomplete}[/yellow] incomplete ~ | [bold red]{missing}[/bold red] missing ✗")
+    console.print(f"\nStatus of files from {start}–{end} ({', '.join(selected)})\n[bold green]{present}[/bold green] present ✓ | [yellow]{incomplete}[/yellow] incomplete ~ | [bold red]{missing}[/bold red] missing ✗")
 
 @cli.command()
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)

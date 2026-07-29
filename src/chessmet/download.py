@@ -39,6 +39,8 @@ logger = logging.getLogger(__name__)
 OUTDIR_DEFAULT = Path("./data/chessmet")
 VARS = ("dtr", "huss", "precip", "psurf", "rlds", "rsds", "sfcWind", "tas")
 YEARS = (1961, 2019)
+START_DEFAULT = 2000
+END_DEFAULT = 2000
 
 @dataclass
 class ChessMetConfig:
