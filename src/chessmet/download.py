@@ -51,8 +51,8 @@ class ChessMetConfig:
     )
     valid_vars: Tuple[str, ...] = VARS
     valid_years: Tuple[int, int] = YEARS
-    default_start_year: int = 2000
-    default_end_year: int = 2000
+    default_start_year: int = START_DEFAULT
+    default_end_year: int = END_DEFAULT
     timeout_seconds: int = 120
     max_workers: int = 2
     chunk_size: int = 65536
@@ -359,15 +359,17 @@ class ChessMetDownloader:
     ) -> dict:
         """Download multiple variables with grand progress bar."""
         vars_ = vars_ or list(self.config.valid_vars)
+        start_year = start_year or self.config.default_start_year
+        end_year = end_year or self.config.default_end_year
         results = {}
         
         # Count ALL files that need downloading
         total_tasks = 0
         for var in vars_:
-            for year in range(start_year or 1989, (end_year or 2005) + 1):
+            for year in range(start_year, (end_year + 1)):
                 for month in range(1, 13):
                     filepath = self._prepare_filepath(outdir, var, year, month)
-                    if not self._file_exists_locally(filepath):
+                    if (not skip_existing) or (not self._file_exists_locally(filepath)):
                         total_tasks += 1
         
         with Progress(
