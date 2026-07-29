@@ -47,7 +47,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src/chessmet_downloader"]
+source = ["chessmet"]
 omit = ["*/tests/*", "*/__main__.py"]
 
 # ============================================================================
