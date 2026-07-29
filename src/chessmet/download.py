@@ -351,6 +351,7 @@ class ChessMetDownloader:
         start_year: Optional[int] = None,
         end_year: Optional[int] = None,
         outdir: Path = OUTDIR_DEFAULT,
+        skip_existing: bool = True,
         parallel: bool = True,
         num_workers: int = 2,
     ) -> dict:
@@ -383,6 +384,7 @@ class ChessMetDownloader:
                     start_year=start_year,
                     end_year=end_year,
                     outdir=outdir,
+                    skip_existing=skip_existing,
                     parallel=parallel,
                     num_workers=num_workers,
                     grand_progress=progress,

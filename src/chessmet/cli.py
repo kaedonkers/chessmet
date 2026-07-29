@@ -104,9 +104,9 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
         start_year=start, 
         end_year=end, 
         outdir=outdir, 
+        skip_existing=skip_existing,
         parallel=(workers > 1), 
         num_workers=workers,
-        skip_existing=skip_existing,
     )
     
     total_success = sum(sum(r.success for r in res) for res in results.values())
