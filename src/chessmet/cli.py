@@ -137,8 +137,8 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
 def status(ctx, vars_, start, end, outdir):
     """Check which files exist locally vs. missing."""
     selected = list(vars_) if vars_ else VARS
-    start = start or START_DEFAULT
-    end = end or END_DEFAULT
+    start = start or YEARS[0]
+    end = end or YEARS[-1]
 
     config = ChessMetConfig(valid_vars=tuple(selected))
     dl = ChessMetDownloader(config=config)
@@ -156,7 +156,10 @@ def status(ctx, vars_, start, end, outdir):
                 else:
                     missing += 1
     
-    console.print(f"\nStatus of files from {start}–{end} ({', '.join(selected)})\n[bold green]{present}[/bold green] present ✓ | [yellow]{incomplete}[/yellow] incomplete ~ | [bold red]{missing}[/bold red] missing ✗")
+    console.print(f"Status of downloaded files")
+    console.print(f"Years: {start}–{end}")
+    console.print(f"Vars : [bold magenta]{'[/bold magenta]  [bold magenta]'.join(selected)}[/bold magenta]")
+    console.print(f"[bold green]{present}[/bold green] present ✓ | [yellow]{incomplete}[/yellow] incomplete ~ | [bold red]{missing}[/bold red] missing ✗")
 
 @cli.command()
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
