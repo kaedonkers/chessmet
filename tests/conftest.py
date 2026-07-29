@@ -50,6 +50,6 @@ def mock_response():
         "Content-Length": "10000000",
     }
     response.iter_content.return_value = [b"x" * 65536 for _ in range(153)]  # ~10MB
-    response.__enter__ = lambda self: response
-    response.__exit__ = lambda self, *args: None
+    response.__enter__.return_value = response
+    response.__exit__.return_value = False
     return response
