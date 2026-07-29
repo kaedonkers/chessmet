@@ -55,6 +55,6 @@ chessmet clean --var tas --yes
 You can also run the module directly:
 
 ```bash
-python -m cli --help
+python -m chessmet --help
 ```
 
