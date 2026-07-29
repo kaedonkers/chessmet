@@ -43,6 +43,7 @@ from rich.progress import (
 )
 from requests.exceptions import ConnectionError, HTTPError, RequestException, Timeout
 
+from chessmet import __version__
 from chessmet.download import OUTDIR_DEFAULT, VARS, YEARS, ChessMetConfig, ChessMetDownloader, DownloadResult
 
 load_dotenv()
@@ -55,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 @click.group()
 @click.option("-v", "--verbose", count=True, help="Increase logging verbosity (-v, -vv).")
-@click.version_option(version="1.0.0", prog_name="chess-dl")
+@click.version_option(version=__version__, prog_name="chessmet")
 @click.pass_context
 def cli(ctx, verbose):
     """Download CHESS-MET NetCDF files from UKCEH EIDC."""

@@ -7,7 +7,7 @@
 name = "chessmet"
 authors = [{name = "Kevin Donkers", email = "k.donkers@exeter.ac.uk"}]
 requires-python = ">= 3.11"
-version = "0.1.0"
+dynamic = ["version"]
 dependencies = [
     "requests",
     "python-dotenv",
@@ -28,6 +28,9 @@ chessmet = "chessmet.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "chessmet.__version__"}
 
 [build-system]
 requires = ["setuptools>=77", "wheel"]
