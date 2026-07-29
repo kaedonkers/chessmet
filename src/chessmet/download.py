@@ -144,29 +144,26 @@ class ChessMetDownloader:
                 
                 with session.get(url, stream=True, timeout=self.config.timeout_seconds) as response:
                     if response.status_code == 401:
-                        if attempt == 0:
-                            raise RuntimeError("401 on first request — check credentials")
-                        else:
-                            logger.warning(f"Attempt {attempt + 1}: 401 error, re-authenticating...")
-                            continue
-                    
+                        raise RuntimeError("401 — check EIDC_USERNAME and EIDC_PASSWORD")
+
                     response.raise_for_status()
-                    
+
                     content_type = response.headers.get("Content-Type", "")
                     if "text/html" in content_type:
                         raise RuntimeError("Server returned HTML login page")
-                    
+
                     filepath.parent.mkdir(parents=True, exist_ok=True)
-                    
+
                     with open(filepath, "wb") as f:
                         for chunk in response.iter_content(chunk_size=self.config.chunk_size):
                             if chunk:
                                 f.write(chunk)
-                    
-                    actual_size = filepath.stat().st_size
-                    return (idx, DownloadResult(
-                        url=url, filepath=filepath, success=True, size_bytes=actual_size
-                    ))
+
+                actual_size = filepath.stat().st_size
+                session.close()
+                return (idx, DownloadResult(
+                    url=url, filepath=filepath, success=True, size_bytes=actual_size
+                ))
             
             except (requests.RequestException, RuntimeError, OSError) as e:
                 error_msg = str(e)
