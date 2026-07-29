@@ -3,10 +3,6 @@
 # author: Lumo2.0, kaedonkers
 # modified: 28 July 2026
 # ---
-"""
-chessmet: 
-"""
-from chessmet.cli import cli
+"""chessmet: Python package + CLI for downloading CHESS-MET NetCDF data."""
 
-if __name__ == "__main__":
-    cli()
+__version__ = "0.1.0"
