@@ -204,8 +204,8 @@ class ChessMetDownloader:
             TextColumn("[progress.description]{task.description}"),
             BarColumn(bar_width=40),
             TaskProgressColumn(),
+            TextColumn("[dim][{task.completed}/{task.total}][/dim]"), 
             TimeElapsedColumn(),
-            # TransferSpeedColumn(),
             console=console,
         ) as progress:
             task = progress.add_task(f"[cyan]Downloading {var:<7}", total=total_files)
@@ -278,6 +278,7 @@ class ChessMetDownloader:
             TextColumn("[progress.description]{task.description}"),
             BarColumn(bar_width=40),
             TaskProgressColumn(),
+            TextColumn("[dim][{task.completed}/{task.total}][/dim]"), 
             TimeElapsedColumn(),
             console=console,
         ) as progress:
@@ -377,6 +378,7 @@ class ChessMetDownloader:
             TextColumn("[bold cyan]{task.description}"),
             BarColumn(bar_width=40),
             TaskProgressColumn(),
+            TextColumn("[dim][{task.completed}/{task.total}][/dim]"), 
             TimeElapsedColumn(),
             console=console,
         ) as progress:
