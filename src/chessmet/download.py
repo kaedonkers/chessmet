@@ -1,7 +1,7 @@
 # ---
 # created: 28 July 2026
 # author: Lumo2.0, kaedonkers
-# modified: 28 July 2026
+# modified: 05 August 2026
 # ---
 """
 CHESS-MET NetCDF Download Utility
@@ -210,117 +210,108 @@ class ChessMetDownloader:
         urls_and_paths: List[Tuple[str, Path]],
         outdir: Path,
         skip_existing: bool = True,
-        grand_progress: Optional[Progress] = None,
+        progress: Optional[Progress] = None,
         grand_task: Optional[int] = None,
     ) -> List[DownloadResult]:
-        """Serial download with progress bar."""
+        """Serial download using shared progress bar."""
         if not urls_and_paths:
             return []
         
         results: List[DownloadResult] = []
         total_files = len(urls_and_paths)
         
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=40),
-            TaskProgressColumn(),
-            TextColumn("[dim][{task.completed}/{task.total}][/dim]"), 
-            TimeElapsedColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task(f"[cyan]Downloading {var:<7}", total=total_files)
-            
-            for url, filepath in urls_and_paths:
-                if skip_existing and self._file_exists_locally(filepath):
-                    progress.advance(task, advance=1)
-                    if grand_progress and grand_task is not None:
-                        grand_progress.update(grand_task, advance=1)
-                    logger.info(f"SKIP: {filepath.name} ({filepath.stat().st_size:,} bytes)")
-                    results.append(DownloadResult(url=url, filepath=filepath, success=True, size_bytes=filepath.stat().st_size))
-                    time.sleep(self.config.rate_limit_delay)
-                    continue
-                
-                session = self._create_session_with_auth()
-                try:
-                    with session.get(url, stream=True, timeout=self.config.timeout_seconds) as response:
-                        if response.status_code == 401:
-                            raise RuntimeError("401 — check EIDC_USERNAME and EIDC_PASSWORD")
-                        response.raise_for_status()
-                        
-                        content_type = response.headers.get("Content-Type", "")
-                        if "text/html" in content_type:
-                            raise RuntimeError("Server returned HTML login page")
-                        
-                        filepath.parent.mkdir(parents=True, exist_ok=True)
-                        with open(filepath, "wb") as f:
-                            for chunk in response.iter_content(chunk_size=self.config.chunk_size):
-                                if chunk:
-                                    f.write(chunk)
-                        
-                        actual_size = filepath.stat().st_size
-                        progress.advance(task, advance=1)
-                        if grand_progress and grand_task is not None:
-                            grand_progress.update(grand_task, advance=1)
-                        logger.info(f"OK: {filepath.name} ({actual_size:,} bytes)")
-                        results.append(DownloadResult(url=url, filepath=filepath, success=True, size_bytes=actual_size))
-                
-                except (requests.RequestException, RuntimeError, OSError) as e:
-                    error_msg = str(e)
-                    logger.error(f"FAIL: {filepath.name} — {error_msg}")
-                    try:
-                        filepath.unlink(missing_ok=True)
-                    except OSError:
-                        pass
-                    results.append(DownloadResult(url=url, filepath=filepath, success=False, error=error_msg))
-                
+        if progress is None:
+            raise ValueError("progress must be provided")
+        
+        task_id = progress.add_task(f"[cyan]Downloading {var:<7}", total=total_files)
+        
+        for url, filepath in urls_and_paths:
+            if skip_existing and self._file_exists_locally(filepath):
+                progress.advance(task_id, advance=1)
+                if grand_task is not None:
+                    progress.advance(grand_task, advance=1)
+                logger.info(f"SKIP: {filepath.name} ({filepath.stat().st_size:,} bytes)")
+                results.append(DownloadResult(url=url, filepath=filepath, success=True, size_bytes=filepath.stat().st_size))
                 time.sleep(self.config.rate_limit_delay)
+                continue
+            
+            session = self._create_session_with_auth()
+            try:
+                with session.get(url, stream=True, timeout=self.config.timeout_seconds) as response:
+                    if response.status_code == 401:
+                        raise RuntimeError("401 — check EIDC_USERNAME and EIDC_PASSWORD")
+                    response.raise_for_status()
+                    
+                    content_type = response.headers.get("Content-Type", "")
+                    if "text/html" in content_type:
+                        raise RuntimeError("Server returned HTML login page")
+                    
+                    filepath.parent.mkdir(parents=True, exist_ok=True)
+                    with open(filepath, "wb") as f:
+                        for chunk in response.iter_content(chunk_size=self.config.chunk_size):
+                            if chunk:
+                                f.write(chunk)
+                    
+                    actual_size = filepath.stat().st_size
+                    progress.advance(task_id, advance=1)
+                    if grand_task is not None:
+                        progress.advance(grand_task, advance=1)
+                    logger.info(f"OK: {filepath.name} ({actual_size:,} bytes)")
+                    results.append(DownloadResult(url=url, filepath=filepath, success=True, size_bytes=actual_size))
+            
+            except (requests.RequestException, RuntimeError, OSError) as e:
+                error_msg = str(e)
+                logger.error(f"FAIL: {filepath.name} — {error_msg}")
+                try:
+                    filepath.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                results.append(DownloadResult(url=url, filepath=filepath, success=False, error=error_msg))
+            
+            time.sleep(self.config.rate_limit_delay)
+        
+        # Note: no progress.remove_task(task_id) — keeps completed bar visible
         
         return results
-    
+
     def download_var_parallel(
         self,
         var: str,
         urls_and_paths: List[Tuple[str, Path]],
         outdir: Path,
         num_workers: int,
-        grand_progress: Optional[Progress] = None,
+        progress: Optional[Progress] = None,
         grand_task: Optional[int] = None,
     ) -> List[DownloadResult]:
-        """Parallel download with progress bar."""
-        # NB: skip_existing is handled in the download_var method before calling this function
+        """Parallel download using shared progress bar."""
         if not urls_and_paths:
             return []
         
         tasks = [(i, url, filepath) for i, (url, filepath) in enumerate(urls_and_paths)]
         results_map = {}
         
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=40),
-            TaskProgressColumn(),
-            TextColumn("[dim][{task.completed}/{task.total}][/dim]"), 
-            TimeElapsedColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task(f"[cyan]Downloading {var:<7}", total=len(tasks))
+        if progress is None:
+            raise ValueError("progress must be provided")
+        
+        task_id = progress.add_task(f"[cyan]Downloading {var:<7}", total=len(tasks))
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            future_to_idx = {
+                executor.submit(self.download_worker, task_item): task_item[0]
+                for task_item in tasks
+            }
             
-            with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-                future_to_idx = {
-                    executor.submit(self.download_worker, task_item): task_item[0]
-                    for task_item in tasks
-                }
-                
-                for future in concurrent.futures.as_completed(future_to_idx):
-                    idx, result = future.result()
-                    results_map[idx] = result
-                    progress.advance(task, advance=1)
-                    if grand_progress and grand_task is not None:
-                        grand_progress.update(grand_task, advance=1)
+            for future in concurrent.futures.as_completed(future_to_idx):
+                idx, result = future.result()
+                results_map[idx] = result
+                progress.advance(task_id, advance=1)
+                if grand_task is not None:
+                    progress.advance(grand_task, advance=1)
+        
+        # Note: no progress.remove_task(task_id) — keeps completed bar visible
         
         return [results_map[i] for i in range(len(tasks))]
-    
+            
     def download_var(
         self,
         var: str,
@@ -330,17 +321,15 @@ class ChessMetDownloader:
         skip_existing: bool = True,
         parallel: bool = False,
         num_workers: int = 1,
-        grand_progress: Optional[Progress] = None,
+        progress: Optional[Progress] = None,
         grand_task: Optional[int] = None,
     ) -> List[DownloadResult]:
         """Download all monthly files for a single variable."""
         start_year = start_year or self.config.default_start_year
         end_year = end_year or self.config.default_end_year
         
-        # ─── VALIDATIONS ───────────────────────────────────────
         self.config.validate_vars(var)
         self.config.validate_years(start_year, end_year)
-        # ────────────────────────────────────────────────────────
         
         urls_and_paths = []
         for year in range(start_year, end_year + 1):
@@ -357,10 +346,10 @@ class ChessMetDownloader:
         logger.info(f"Downloading {len(urls_and_paths)} files for {var}...")
         
         if parallel and num_workers > 1:
-            return self.download_var_parallel(var, urls_and_paths, outdir, num_workers, grand_progress, grand_task)
+            return self.download_var_parallel(var, urls_and_paths, outdir, num_workers, progress, grand_task)
         else:
-            return self.download_var_serial(var, urls_and_paths, outdir, skip_existing, grand_progress, grand_task)
-    
+            return self.download_var_serial(var, urls_and_paths, outdir, skip_existing, progress, grand_task)
+        
     def download_all_vars(
         self,
         vars_: Optional[List[str]] = None,
@@ -395,6 +384,7 @@ class ChessMetDownloader:
             TimeElapsedColumn(),
             console=console,
         ) as progress:
+            # ADD GRAND TASK FIRST → always rendered at TOP of stack
             grand_task = progress.add_task("[yellow]Overall Progress   ", total=total_tasks)
             
             for var in vars_:
@@ -406,8 +396,8 @@ class ChessMetDownloader:
                     skip_existing=skip_existing,
                     parallel=parallel,
                     num_workers=num_workers,
-                    grand_progress=progress,
-                    grand_task=grand_task,
+                    progress=progress,  # ← shared progress instance
+                    grand_task=grand_task,  # ← grand task ID
                 )
         
         return results
