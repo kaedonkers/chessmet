@@ -1,6 +1,8 @@
 ## chessmet
 .env
 data/
+.DS_Store
+.github/agents/
 
 ## Python
 # Byte-compiled / optimized / DLL files
