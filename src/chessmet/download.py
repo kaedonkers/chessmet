@@ -11,6 +11,7 @@ import base64
 import calendar
 import concurrent.futures
 import logging
+# TODO: save logging to file for diagnostics
 import os
 import time
 from dataclasses import dataclass
@@ -36,7 +37,7 @@ load_dotenv()
 console = Console()
 logger = logging.getLogger(__name__)
 
-OUTDIR_DEFAULT = Path("./data/chessmet")
+OUTDIR_DEFAULT = Path("data/chessmet")
 VARS = ("dtr", "huss", "precip", "psurf", "rlds", "rsds", "sfcWind", "tas")
 YEARS = (1961, 2019)
 START_DEFAULT = 2000
