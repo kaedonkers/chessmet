@@ -17,7 +17,6 @@ from chessmet.download import (
     ChessMetConfig,
     DownloadResult,
 )
-from conftest import make_hdf5
 
 class TestDownloadVar:
     """Test download_var method."""
@@ -32,7 +31,7 @@ class TestDownloadVar:
         url = downloader._build_url("precip", 2000, 2)
         assert "20000201-20000229" in url  # Leap year February
     
-    def test_file_exists_check(self, downloader, temp_dir):
+    def test_file_exists_check(self, downloader, temp_dir, make_hdf5_file):
         """Test _file_exists_locally returns correct values."""
         filepath = temp_dir / "test.nc"
         
@@ -45,11 +44,11 @@ class TestDownloadVar:
         assert not downloader._file_exists_locally(filepath)
         
         # Truncated NetCDF-4 file
-        filepath.write_bytes(make_hdf5(eof=5000)[:4000])
+        make_hdf5_file(filepath, eof=5000, size=4000)
         assert not downloader._file_exists_locally(filepath)
         
         # Complete NetCDF-4 file
-        filepath.write_bytes(make_hdf5(eof=5000))
+        make_hdf5_file(filepath, eof=5000)
         assert downloader._file_exists_locally(filepath)
     
     def test_prepare_filepath(self, downloader, temp_dir):
@@ -86,12 +85,9 @@ class TestDownloadVar:
         assert results[0].size_bytes > 0
     
     @patch("requests.Session.get")
-    def test_download_var_serial_skip_existing(self, mock_get, downloader, temp_dir):
+    def test_download_var_serial_skip_existing(self, mock_get, downloader, temp_dir, make_hdf5_file):
         """Test existing files are skipped."""
-        # Pre-create a large file
-        filepath = temp_dir / "tas" / "chess-met_tas_gb_1km_daily_19910101-19910131.nc"
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        filepath.write_bytes(make_hdf5(eof=5000))
+        filepath = make_hdf5_file(temp_dir / "tas" / "chess-met_tas_gb_1km_daily_19910101-19910131.nc")
         
         urls_and_paths = [
             ("https://test.url/file.nc", filepath)

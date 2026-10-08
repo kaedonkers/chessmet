@@ -4,21 +4,30 @@
 # modified: 08 October 2026
 # ---
 """Pytest configuration and shared fixtures."""
-import os
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
+
 import pytest
 
-from chessmet.download import ChessMetDownloader, ChessMetConfig, DownloadResult
+from chessmet.download import ChessMetConfig, ChessMetDownloader
 
-def make_hdf5(eof: int, version: int = 0) -> bytes:
-    """Minimal HDF5 superblock claiming a total file length of `eof` bytes, zero-padded."""
-    sig = b"\x89HDF\r\n\x1a\n"
-    if version == 0:
+_HDF5_SIGNATURE = b"\x89HDF\r\n\x1a\n"
+
+
+def _hdf5_bytes(eof: int, version: int, size: int) -> bytes:
+    """HDF5 superblock claiming a file length of `eof`, zero-padded to `size` bytes."""
+    if version in (0, 1):
         # sig, versions(4), sizes: offset=8, length=8, reserved, group K(4), flags(4), base, free-space, EOF
-        head = sig + bytes([0, 0, 0, 0, 0, 8, 8, 0]) + b"\x04\x00\x10\x00" + b"\x00" * 4
-        head += (0).to_bytes(8, "little") * 2 + eof.to_bytes(8, "little")
+        head = _HDF5_SIGNATURE + bytes([version, 0, 0, 0, 0, 8, 8, 0]) + b"\x04\x00\x10\x00" + b"\x00" * 4
+        if version == 1:
+            head += b"\x00" * 4  # indexed-storage K + reserved
+    elif version in (2, 3):
+        # sig, version, offset size, length size, flags, base, extension, EOF
+        head = _HDF5_SIGNATURE + bytes([version, 8, 8, 0])
     else:
+        raise ValueError(f"unsupported superblock version {version}")
+    head += (0).to_bytes(8, "little") * 2 + eof.to_bytes(8, "little")
+    return (head + b"\x00" * max(0, size - len(head)))[:size]
+
 
 @pytest.fixture(autouse=True)
 def isolated_env(monkeypatch, tmp_path):
@@ -28,11 +37,19 @@ def isolated_env(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)  # the CLI looks for .env in the current directory
 
 
+@pytest.fixture
+def make_hdf5_file():
+    """Factory: write a minimal HDF5 file; `size` below `eof` makes it a truncated download."""
+    def _make(path, eof: int = 5000, version: int = 0, size: int = None):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(_hdf5_bytes(eof, version, eof if size is None else size))
+        return path
+    return _make
 
 
 @pytest.fixture
 def temp_dir(tmp_path):
-    """Create temporary directory for test downloads."""
+    """Download directory under tmp_path (not created until something writes to it)."""
     return tmp_path / "test_data"
 
 
@@ -55,22 +72,28 @@ def config(token_env):
         rate_limit_delay=0,
     )
 
-@pytest.fixture
-def downloader(config):
-    """Create a ChessMetDownloader instance."""
-    return ChessMetDownloader(config=config)
 
 @pytest.fixture
-def mock_response():
-    """Mock requests.Response streaming a few small chunks."""
-    chunks = [b"x" * 1024 for _ in range(3)]
-    response = MagicMock()
-    response.status_code = 200
-    response.headers = {
-        "Content-Type": "application/octet-stream",
-        "Content-Length": str(sum(len(c) for c in chunks)),
-    }
-    response.iter_content.return_value = chunks
-    response.__enter__.return_value = response
-    response.__exit__.return_value = False
-    return response
+def downloader(config):
+    return ChessMetDownloader(config=config)
+
+
+@pytest.fixture
+def make_response():
+    """Factory: mock streaming requests.Response. `content_length` defaults to the true byte count."""
+    def _make(chunks=None, content_length=None):
+        chunks = chunks if chunks is not None else [b"x" * 1024 for _ in range(3)]
+        declared = sum(len(c) for c in chunks) if content_length is None else content_length
+        response = MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "application/octet-stream", "Content-Length": str(declared)}
+        response.iter_content.return_value = chunks
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        return response
+    return _make
+
+
+@pytest.fixture
+def mock_response(make_response):
+    return make_response()

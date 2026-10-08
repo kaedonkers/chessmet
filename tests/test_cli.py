@@ -12,15 +12,6 @@ import pytest
 from click.testing import CliRunner
 
 from chessmet.cli import cli
-from conftest import make_hdf5
-
-GOOD = make_hdf5(eof=5000)
-TRUNCATED = GOOD[:4000]
-
-
-@pytest.fixture(autouse=True)
-def clean_env(monkeypatch):
-    monkeypatch.delenv("EIDC_TOKEN", raising=False)
 
 
 @pytest.fixture
@@ -29,17 +20,15 @@ def runner():
 
 
 @pytest.fixture
-def populated(tmp_path):
+def populated(tmp_path, make_hdf5_file):
     """tas: 1 complete, 1 truncated, 1 .part, plus a stray file; precip: 1 complete."""
     tas = tmp_path / "tas"
     precip = tmp_path / "precip"
-    tas.mkdir()
-    precip.mkdir()
-    (tas / "a.nc").write_bytes(GOOD)
-    (tas / "b.nc").write_bytes(TRUNCATED)
+    make_hdf5_file(tas / "a.nc")
+    make_hdf5_file(tas / "b.nc", size=4000)
     (tas / "c.nc.part").write_bytes(b"partial")
     (tas / ".DS_Store").write_bytes(b"x")
-    (precip / "d.nc").write_bytes(GOOD)
+    make_hdf5_file(precip / "d.nc")
     return tmp_path
 
 
@@ -104,10 +93,9 @@ def test_clean_force_with_incomplete_only_is_rejected(runner, populated):
     assert len(names(populated / "tas")) == 4
 
 
-def test_clean_never_touches_unknown_folders(runner, tmp_path):
+def test_clean_never_touches_unknown_folders(runner, tmp_path, make_hdf5_file):
     other = tmp_path / "documents"
-    other.mkdir()
-    (other / "keep.nc").write_bytes(GOOD)
+    make_hdf5_file(other / "keep.nc")
     res = runner.invoke(cli, ["clean", "-o", str(tmp_path), "--force", "--yes"])
     assert "Nothing to clean" in res.output
     assert (other / "keep.nc").exists()
@@ -115,12 +103,11 @@ def test_clean_never_touches_unknown_folders(runner, tmp_path):
 
 # ── status ─────────────────────────────────────────────────────
 
-def test_status_counts_present_incomplete_part_and_missing(runner, tmp_path):
+def test_status_counts_present_incomplete_part_and_missing(runner, tmp_path, make_hdf5_file):
     tas = tmp_path / "tas"
-    tas.mkdir()
     base = "chess-met_tas_gb_1km_daily_2000{m}01-2000{m}{d}.nc"
-    (tas / base.format(m="01", d="31")).write_bytes(GOOD)
-    (tas / base.format(m="02", d="29")).write_bytes(TRUNCATED)
+    make_hdf5_file(tas / base.format(m="01", d="31"))
+    make_hdf5_file(tas / base.format(m="02", d="29"), size=4000)
     (tas / (base.format(m="03", d="31") + ".part")).write_bytes(b"partial")
 
     res = runner.invoke(cli, ["status", "-o", str(tmp_path), "--var", "tas", "-s", "2000", "-e", "2000"])
