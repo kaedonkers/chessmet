@@ -18,39 +18,33 @@ Usage:
     chessmet download --var tas --start 2000 --end 2000
 """
 
-import calendar
-import concurrent.futures
 import logging
-import os
 import shutil
 import sys
-import time
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Generator, List, Optional, Tuple
+from typing import List, Optional
 
 import click
-import requests
 from dotenv import find_dotenv, load_dotenv
 from rich.logging import RichHandler
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TransferSpeedColumn,
-)
-from requests.exceptions import ConnectionError, HTTPError, RequestException, Timeout
 
 from chessmet import __version__
+
 # `console` is shared with download.py: the progress bar and the log handler must use the same Console,
 # otherwise log lines are drawn over the bar instead of above it.
 from chessmet.download import (
-    OUTDIR_DEFAULT, VARS, month_range, parse_period, resolve_months,
-    ChessMetConfig, ChessMetDownloader, DownloadResult, TOKEN_PREFIX, TOKENS_URL, console, is_complete_netcdf
-    )
+    OUTDIR_DEFAULT,
+    TOKEN_PREFIX,
+    TOKENS_URL,
+    VARS,
+    ChessMetConfig,
+    ChessMetDownloader,
+    console,
+    is_complete_netcdf,
+    month_range,
+    parse_period,
+    resolve_months,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +196,7 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
     # if *no* vars valid: console.print(error) and exit
     (sy, sm), (ey, em) = _resolve_period(config, start, end, "Using")
 
-    console.print(f"[bold green]Downloading CHESS-MET files[/bold green]")
+    console.print("[bold green]Downloading CHESS-MET files[/bold green]")
     console.print(f"[dim]Period:[/dim] {_fmt_period((sy, sm), (ey, em))}")
     console.print(f"[dim]Vars:  [/dim] [bold magenta]{'[/bold magenta]  [bold magenta]'.join(selected)}[/bold magenta]")
     console.print(f"[dim]Outdir:[/dim] {outdir.resolve()}")
@@ -276,7 +270,7 @@ def status(ctx, vars_, start, end, outdir):
             else:
                 missing += 1
     
-    console.print(f"Status of downloaded files")
+    console.print("Status of downloaded files")
     console.print(f"Period: {_fmt_period((sy, sm), (ey, em))}")
     console.print(f"Vars : [bold magenta]{'[/bold magenta]  [bold magenta]'.join(selected)}[/bold magenta]")
     console.print(f"[bold green]{present}[/bold green] present ✓ | [yellow]{incomplete}[/yellow] incomplete ~ | [bold red]{missing}[/bold red] missing ✗")

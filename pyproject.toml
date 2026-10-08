@@ -19,8 +19,7 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-cov",
-    "black",
-    "mypy",
+    "ruff",
 ]
 
 [project.scripts]
@@ -43,6 +42,13 @@ addopts = '-m "not live"'
 markers = [
     "live: talks to the real EIDC server with your real token (opt in with: pytest -m live)",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["F", "I"]
 
 [tool.coverage.run]
 source = ["chessmet"]
@@ -80,8 +86,8 @@ tests = { features = ["pytest"], solve-group = "default" }
 [tool.pixi.feature.pytest.dependencies]
 pytest = "*"
 pytest-cov = "*"
-black = "*"
-mypy = "*"
+ruff = "*"
 
 [tool.pixi.feature.pytest.tasks]
 tests = "pytest tests"
+lint = "ruff check src tests"

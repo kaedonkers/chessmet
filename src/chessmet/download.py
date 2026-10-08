@@ -10,16 +10,16 @@ CHESS-MET NetCDF Download Utility
 import calendar
 import concurrent.futures
 import logging
+
 # TODO: save logging to file for diagnostics
 import os
-from urllib.parse import urlsplit
 import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Generator, List, Optional, Tuple
+from typing import List, Optional, Tuple
+from urllib.parse import urlsplit
 
-import click
 import requests
 from rich.console import Console
 from rich.progress import (
@@ -29,9 +29,7 @@ from rich.progress import (
     TaskProgressColumn,
     TextColumn,
     TimeElapsedColumn,
-    TransferSpeedColumn,
 )
-from requests.exceptions import ConnectionError, HTTPError, RequestException, Timeout
 
 console = Console()
 logger = logging.getLogger(__name__)

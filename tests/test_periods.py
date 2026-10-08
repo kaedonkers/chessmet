@@ -13,7 +13,6 @@ import pytest
 from chessmet.cli import cli
 from chessmet.download import month_range, parse_period, resolve_months
 
-
 # ── parsing and defaults (pure functions) ──────────────────────
 
 @pytest.mark.parametrize("text, end, expected", [
