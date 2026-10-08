@@ -20,7 +20,6 @@ from typing import Generator, List, Optional, Tuple
 
 import click
 import requests
-from dotenv import load_dotenv
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -33,7 +32,6 @@ from rich.progress import (
 )
 from requests.exceptions import ConnectionError, HTTPError, RequestException, Timeout
 
-load_dotenv()
 console = Console()
 logger = logging.getLogger(__name__)
 

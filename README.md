@@ -41,6 +41,36 @@ pip install -e .
 chessmet --help
 ```
 
+## Python usage
+
+The library never reads `.env` itself; it only looks at real environment variables, or at a token you pass in.
+Only the CLI loads `.env` (from the current directory or a parent).
+
+```python
+from pathlib import Path
+from chessmet.download import ChessMetConfig, ChessMetDownloader
+
+# a) Pass the token explicitly (e.g. from your own secrets manager)
+config = ChessMetConfig(token="pat_your_personal_access_token")
+
+# b) Or load .env yourself, then let the config read EIDC_TOKEN from the environment
+# from dotenv import load_dotenv
+# load_dotenv()              # searches upward from the script's folder; or load_dotenv(".env")
+# config = ChessMetConfig()
+
+downloader = ChessMetDownloader(config)
+results = downloader.download_all_vars(
+    vars_=["tas"], start_year=2000, end_year=2000,
+    outdir=Path("data/chessmet"), parallel=False,
+)
+for var, files in results.items():
+    for r in files:
+        print(var, r.filepath.name, "ok" if r.success else r.error)
+```
+
+A rejected token raises no exception from `download_all_vars`; the failure is reported in each result's `error`
+(see the `401`/`403` notes above).
+
 ## CLI usage
 
 ```bash

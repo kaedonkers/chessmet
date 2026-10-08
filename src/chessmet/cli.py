@@ -18,7 +18,6 @@ Usage:
     chessmet download --var tas --start 2000 --end 2000
 """
 
-import base64
 import calendar
 import concurrent.futures
 import logging
@@ -32,7 +31,7 @@ from typing import Generator, List, Optional, Tuple
 
 import click
 import requests
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -51,7 +50,6 @@ from chessmet.download import (
     ChessMetConfig, ChessMetDownloader, DownloadResult, TOKEN_PREFIX, TOKENS_URL, is_complete_netcdf
     )
 
-load_dotenv()
 console = Console()
 logger = logging.getLogger(__name__)
 
@@ -86,6 +84,8 @@ def _ensure_credentials(ctx, config: ChessMetConfig) -> None:
 def cli(ctx, verbose):
     """Download CHESS-MET NetCDF files from UKCEH EIDC."""
     ctx.ensure_object(dict)
+    # Explicit and cwd-only: never searches the package's own parent directories
+    load_dotenv(find_dotenv(usecwd=True))
     level = logging.WARNING if verbose == 0 else (logging.INFO if verbose == 1 else logging.DEBUG)
     logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s", level=level, force=True)
     ctx.obj["log_level"] = level
