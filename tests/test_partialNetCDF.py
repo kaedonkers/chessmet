@@ -1,19 +1,21 @@
+# ---
+# created: 08 October 2026
+# author: kaedonkers, Claude Sonnet 5.5
+# modified: 08 October 2026
+# ---
+
 """Test NetCDF completeness detection and atomic (.part) downloads."""
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from chessmet.download import ChessMetConfig, ChessMetDownloader, is_complete_netcdf
-from conftest import make_hdf5
 
 
-@pytest.mark.parametrize("version", [0, 2])
-def test_is_complete_netcdf(tmp_path, version):
-    p = tmp_path / "f.nc"
-    p.write_bytes(make_hdf5(10_000, version))
-    assert is_complete_netcdf(p)
-    p.write_bytes(make_hdf5(10_000, version)[:9_999])
-    assert not is_complete_netcdf(p)
+@pytest.mark.parametrize("version", [0, 1, 2, 3])
+def test_is_complete_netcdf(tmp_path, make_hdf5_file, version):
+    assert is_complete_netcdf(make_hdf5_file(tmp_path / "ok.nc", eof=10_000, version=version))
+    assert not is_complete_netcdf(make_hdf5_file(tmp_path / "short.nc", eof=10_000, version=version, size=9_999))
 
 
 def test_not_hdf5_or_missing_is_incomplete(tmp_path):
@@ -25,18 +27,9 @@ def test_not_hdf5_or_missing_is_incomplete(tmp_path):
     assert not is_complete_netcdf(p)
 
 
-def _response(chunks, content_length):
-    r = MagicMock(status_code=200)
-    r.headers = {"Content-Type": "application/octet-stream", "Content-Length": str(content_length)}
-    r.iter_content.return_value = chunks
-    r.__enter__.return_value = r
-    r.__exit__.return_value = False
-    return r
-
-
 @patch("requests.Session.get")
-def test_short_download_leaves_no_files(mock_get, tmp_path):
-    mock_get.return_value = _response([b"x" * 100], content_length=500)
+def test_short_download_leaves_no_files(mock_get, tmp_path, make_response):
+    mock_get.return_value = make_response([b"x" * 100], content_length=500)
     dl = ChessMetDownloader(ChessMetConfig(token="pat_t", rate_limit_delay=0))
     target = tmp_path / "tas" / "a.nc"
     _, res = dl.download_worker((0, "http://x/a.nc", target), retry_attempts=1)
@@ -47,8 +40,8 @@ def test_short_download_leaves_no_files(mock_get, tmp_path):
 
 
 @patch("requests.Session.get")
-def test_good_download_is_renamed_and_part_removed(mock_get, tmp_path):
-    mock_get.return_value = _response([b"x" * 100], content_length=100)
+def test_good_download_is_renamed_and_part_removed(mock_get, tmp_path, make_response):
+    mock_get.return_value = make_response([b"x" * 100], content_length=100)
     dl = ChessMetDownloader(ChessMetConfig(token="pat_t", rate_limit_delay=0))
     target = tmp_path / "tas" / "a.nc"
     _, res = dl.download_worker((0, "http://x/a.nc", target), retry_attempts=1)
@@ -59,10 +52,10 @@ def test_good_download_is_renamed_and_part_removed(mock_get, tmp_path):
 
 
 @patch("requests.Session.get")
-def test_failed_overwrite_keeps_existing_file(mock_get, tmp_path):
+def test_failed_overwrite_keeps_existing_file(mock_get, tmp_path, make_response):
     target = tmp_path / "a.nc"
     target.write_bytes(b"old")
-    mock_get.return_value = _response([b"x" * 10], content_length=500)
+    mock_get.return_value = make_response([b"x" * 10], content_length=500)
     dl = ChessMetDownloader(ChessMetConfig(token="pat_t", rate_limit_delay=0))
     dl.download_worker((0, "http://x/a.nc", target), retry_attempts=1)
     assert target.read_bytes() == b"old"
