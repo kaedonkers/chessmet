@@ -48,7 +48,7 @@ from chessmet import __version__
 # `console` is shared with download.py: the progress bar and the log handler must use the same Console,
 # otherwise log lines are drawn over the bar instead of above it.
 from chessmet.download import (
-    OUTDIR_DEFAULT, VARS, month_range, parse_period,
+    OUTDIR_DEFAULT, VARS, month_range, parse_period, resolve_months,
     ChessMetConfig, ChessMetDownloader, DownloadResult, TOKEN_PREFIX, TOKENS_URL, console, is_complete_netcdf
     )
 
@@ -119,14 +119,19 @@ def _period_option(ctx, param, value):
 def _resolve_period(config, start, end, verb):
     """Turn --start/--end text into clamped ((year, month), (year, month)) bounds.
 
-    start defaults to the first available month. A bare year as end means December, and end
-    defaults to the end of the period that start names (so `-s 2005` is the whole of 2005).
+    Omitted values are filled in by `resolve_months`, shared with the library. With no --start,
+    the whole available range is used.
     """
     first, last = (config.min_year, 1), (config.max_year, 12)
-    first_ym = parse_period(start) if start is not None else first
-    last_ym = parse_period(end, end=True) if end is not None else (
-        parse_period(start, end=True) if start is not None else last
-    )
+    if start is None:
+        first_ym = first
+        last_ym = parse_period(end, end=True) if end is not None else last
+    else:
+        year, month = parse_period(start)
+        bare_year = len(str(start).strip()) == 4
+        end_year, end_month = parse_period(end, end=True) if end is not None else (None, None)
+        sy, ey, sm, em = resolve_months(year, end_year, None if bare_year else month, end_month)
+        first_ym, last_ym = (sy, sm), (ey, em)
     if first_ym > last_ym:
         raise click.UsageError(f"--start ({start}) is after --end ({end}).")
     if first_ym < first:
