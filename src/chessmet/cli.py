@@ -116,7 +116,10 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
         console.print(f"[bold orange1]WARNING:[/bold orange1] {end} > {config.max_year}: Using   end={config.max_year}")
         end = config.max_year
 
-    console.print(f"[bold cyan]Downloading[/bold cyan] {', '.join(selected)} [dim]for[/dim] {start}–{end} [dim]→[/dim] {outdir}")
+    console.print(f"[bold green]Downloading CHESS-MET files[/bold green]")
+    console.print(f"[dim]Years: [/dim] {start}–{end}")
+    console.print(f"[dim]Vars:  [/dim] [bold magenta]{'[/bold magenta]  [bold magenta]'.join(selected)}[/bold magenta]")
+    console.print(f"[dim]Outdir:[/dim] {outdir.resolve()}")
     
     if dry_run:
         console.print("\n[yellow][DRY RUN][/yellow]")
@@ -129,7 +132,7 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
                     console.print(f"  {status} {filepath.relative_to(outdir)}")
         return
     
-    console.print(f"[dim]Mode:[/dim] {'parallel (' + str(workers) + ' workers)' if workers > 1 else 'serial'}")
+    console.print(f"[dim]Mode:  [/dim] {'parallel (' + str(workers) + ' workers)' if workers > 1 else 'serial'}")
     
     dl = ChessMetDownloader(config=config)
     results = dl.download_all_vars(
@@ -206,6 +209,8 @@ def status(ctx, vars_, start, end, outdir):
 @click.pass_context
 def clean(ctx, vars_, outdir, yes, dry_run):
     """Remove downloaded NetCDF files."""
+    # TODO: add option to remove only incomplete files
+    # TODO: default selected to (populated) subfolders in data/chessmet
     selected = list(vars_) if vars_ else VARS
     if not yes and not dry_run:
         if not click.confirm(f"Delete all NetCDF files for {', '.join(selected)} in {outdir}?"):
