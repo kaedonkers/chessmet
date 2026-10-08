@@ -4,7 +4,7 @@
 # modified: 08 October 2026
 # ---
 
-"""Test NetCDF completeness detection and atomic (.part) downloads."""
+"""Test downloaded files on disk: NetCDF completeness detection and atomic (.part) writes."""
 from unittest.mock import patch
 
 import pytest

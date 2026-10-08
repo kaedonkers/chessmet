@@ -4,9 +4,11 @@
 # modified: 08 October 2026
 # ---
 """Pytest configuration and shared fixtures."""
+import signal
 from unittest.mock import MagicMock
 
 import pytest
+from click.testing import CliRunner
 
 from chessmet.download import ChessMetConfig, ChessMetDownloader
 
@@ -35,6 +37,33 @@ def isolated_env(monkeypatch, tmp_path):
     for name in ("EIDC_TOKEN", "EIDC_BASE_URL", "RATE_LIMIT_DELAY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.chdir(tmp_path)  # the CLI looks for .env in the current directory
+
+
+@pytest.fixture(autouse=True)
+def sleep(monkeypatch):
+    """Retry backoff never really waits. The mock is returned so tests can assert on the delays."""
+    mock = MagicMock()
+    monkeypatch.setattr("chessmet.download.time.sleep", mock)
+    return mock
+
+
+@pytest.fixture(autouse=True)
+def slow_test_guard():
+    """Fail any test that runs longer than 10 s (e.g. a stray real network call). Unix only."""
+    if not hasattr(signal, "SIGALRM"):
+        yield
+        return
+
+    def _timeout(signum, frame):
+        raise TimeoutError("test exceeded 10 s; is something really sleeping or hitting the network?")
+
+    previous = signal.signal(signal.SIGALRM, _timeout)
+    signal.alarm(10)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 @pytest.fixture
@@ -97,3 +126,8 @@ def make_response():
 @pytest.fixture
 def mock_response(make_response):
     return make_response()
+
+
+@pytest.fixture
+def runner():
+    return CliRunner()
