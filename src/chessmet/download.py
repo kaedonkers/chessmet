@@ -12,6 +12,7 @@ import concurrent.futures
 import logging
 # TODO: save logging to file for diagnostics
 import os
+from urllib.parse import urlsplit
 import threading
 import time
 from dataclasses import dataclass, field
@@ -81,16 +82,15 @@ def _env_token() -> Optional[str]:
 
 TOKEN_PREFIX = "pat_"
 TOKENS_URL = "https://catalogue.ceh.ac.uk/sso/tokens"
+DEFAULT_BASE_URL = "https://catalogue.ceh.ac.uk/datastore/eidchub/835a50df-e74f-4bfb-b593-804fd61d5eab"
+ALLOWED_HOST = "catalogue.ceh.ac.uk"  # the token is only ever sent here
 DATASET_URL = "https://doi.org/10.5285/835a50df-e74f-4bfb-b593-804fd61d5eab"
 
 
 @dataclass
 class ChessMetConfig:
     """Configuration for CHESS-MET download."""
-    base_url: str = os.getenv(
-        "EIDC_BASE_URL",
-        "https://catalogue.ceh.ac.uk/datastore/eidchub/835a50df-e74f-4bfb-b593-804fd61d5eab"
-    )
+    base_url: str = field(default_factory=lambda: os.getenv("EIDC_BASE_URL", DEFAULT_BASE_URL))
     valid_vars: Tuple[str, ...] = VARS
     valid_years: Tuple[int, int] = YEARS
     default_start_year: int = START_DEFAULT
@@ -98,12 +98,21 @@ class ChessMetConfig:
     timeout_seconds: int = 120
     max_workers: int = 2
     chunk_size: int = 65536
-    rate_limit_delay: float = float(os.getenv("RATE_LIMIT_DELAY", "3.0"))
+    rate_limit_delay: float = field(default_factory=lambda: float(os.getenv("RATE_LIMIT_DELAY", "3.0")))
     default_outdir: Path = OUTDIR_DEFAULT
     max_retries: int = 3
     
     # Preferred: personal access token (EIDC_TOKEN), sent as a Bearer token.
     token: Optional[str] = field(default_factory=_env_token, repr=False)
+    def __post_init__(self):
+        self.base_url = self.base_url.rstrip("/")
+        parts = urlsplit(self.base_url)
+        if parts.scheme != "https" or parts.hostname != ALLOWED_HOST or parts.username or parts.password:
+            raise ValueError(
+                f"base_url must be an https URL on {ALLOWED_HOST} (got {self.base_url!r}); "
+                "the access token is only sent to that host."
+            )
+
     @property
     def token_looks_valid(self) -> bool:
         """EIDC tokens normally start with 'pat_'; used only to warn, never to block."""

@@ -8,11 +8,12 @@ https://catalogue.ceh.ac.uk/documents/835a50df-e74f-4bfb-b593-804fd61d5eab
 
 ### 1) Authentication
 
-Create a personal access token in your EIDC account and put it in a local `.env` file in the repository root:
+Create a personal access token in your EIDC account and put it in a local `.env` file in the directory you run `chessmet` from (the CLI reads `.env` from the current directory, or any parent of it):
 
 ```env
 EIDC_TOKEN=your_personal_access_token
 # Optional:
+# EIDC_BASE_URL (must be https on catalogue.ceh.ac.uk; the token is never sent elsewhere)
 # EIDC_BASE_URL=https://catalogue.ceh.ac.uk/datastore/eidchub/835a50df-e74f-4bfb-b593-804fd61d5eab
 ```
 
