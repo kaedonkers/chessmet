@@ -202,11 +202,12 @@ def status(ctx, vars_, start, end, outdir):
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
 @click.option("--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
 @click.option("--yes", is_flag=True, default=False)
+@click.option("--dry-run", is_flag=True, help="List files that would be removed without deleting them.")
 @click.pass_context
-def clean(ctx, vars_, outdir, yes):
+def clean(ctx, vars_, outdir, yes, dry_run):
     """Remove downloaded NetCDF files."""
     selected = list(vars_) if vars_ else VARS
-    if not yes:
+    if not yes and not dry_run:
         if not click.confirm(f"Delete all NetCDF files for {', '.join(selected)} in {outdir}?"):
             ctx.exit(0)
     
@@ -215,11 +216,18 @@ def clean(ctx, vars_, outdir, yes):
         var_dir = outdir / var
         if var_dir.exists():
             for fp in list(var_dir.glob("*.nc")) + list(var_dir.glob("*.nc.part")):
-                fp.unlink()
+                if dry_run:
+                    console.print(f"Would remove {fp}")
+                else:
+                    fp.unlink()
                 removed += 1
-            try:
-                var_dir.rmdir()
-            except OSError:
-                pass
+            if not dry_run:
+                try:
+                    var_dir.rmdir()
+                except OSError:
+                    pass
     
-    console.print(f"[bold green]Removed[/bold green] {removed} files")
+    if dry_run:
+        console.print(f"[bold yellow]Dry run:[/bold yellow] {removed} files would be removed")
+    else:
+        console.print(f"[bold green]Removed[/bold green] {removed} files")
