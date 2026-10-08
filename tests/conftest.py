@@ -19,9 +19,15 @@ def make_hdf5(eof: int, version: int = 0) -> bytes:
         head = sig + bytes([0, 0, 0, 0, 0, 8, 8, 0]) + b"\x04\x00\x10\x00" + b"\x00" * 4
         head += (0).to_bytes(8, "little") * 2 + eof.to_bytes(8, "little")
     else:
-        # v2: sig, version, offset size, length size, flags, base, extension, EOF
-        head = sig + bytes([2, 8, 8, 0]) + (0).to_bytes(8, "little") * 2 + eof.to_bytes(8, "little")
-    return head + b"\x00" * (eof - len(head))
+
+@pytest.fixture(autouse=True)
+def isolated_env(monkeypatch, tmp_path):
+    """Keep the developer's real .env and shell settings out of every test."""
+    for name in ("EIDC_TOKEN", "EIDC_BASE_URL", "RATE_LIMIT_DELAY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.chdir(tmp_path)  # the CLI looks for .env in the current directory
+
+
 
 
 @pytest.fixture
@@ -29,14 +35,16 @@ def temp_dir(tmp_path):
     """Create temporary directory for test downloads."""
     return tmp_path / "test_data"
 
-@pytest.fixture
-def valid_env_vars(monkeypatch):
-    """Set up a valid EIDC token for testing."""
-    monkeypatch.setenv("EIDC_TOKEN", "pat_test_token_abc123")
 
 @pytest.fixture
-def config(valid_env_vars):
-    """Create a ChessMetConfig with test credentials."""
+def token_env(monkeypatch):
+    """Provide a valid-looking EIDC token."""
+    monkeypatch.setenv("EIDC_TOKEN", "pat_test_token_abc123")
+
+
+@pytest.fixture
+def config(token_env):
+    """ChessMetConfig with a test token and no rate-limit delay."""
     return ChessMetConfig(
         valid_vars=("precip", "tas", "rsds"),
         valid_years=(1961, 2019),

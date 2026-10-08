@@ -18,12 +18,6 @@ from chessmet.download import (
 )
 
 
-@pytest.fixture(autouse=True)
-def clean_env(monkeypatch):
-    for k in ("EIDC_TOKEN",):
-        monkeypatch.delenv(k, raising=False)
-
-
 def test_token_gives_bearer_header(monkeypatch):
     monkeypatch.setenv("EIDC_TOKEN", " pat_tok123 ")
     s = ChessMetDownloader(ChessMetConfig())._create_session_with_auth()
