@@ -206,33 +206,48 @@ def status(ctx, vars_, start, end, outdir):
 @click.option("--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
 @click.option("--yes", is_flag=True, default=False)
 @click.option("--dry-run", is_flag=True, help="List files that would be removed without deleting them.")
+@click.option("--incomplete-only", is_flag=True, help="Only remove incomplete files (truncated .nc and leftover .part files).")
 @click.pass_context
-def clean(ctx, vars_, outdir, yes, dry_run):
-    """Remove downloaded NetCDF files."""
-    # TODO: add option to remove only incomplete files
-    # TODO: default selected to (populated) subfolders in data/chessmet
-    selected = list(vars_) if vars_ else VARS
-    if not yes and not dry_run:
-        if not click.confirm(f"Delete all NetCDF files for {', '.join(selected)} in {outdir}?"):
-            ctx.exit(0)
-    
-    removed = 0
+def clean(ctx, vars_, outdir, yes, dry_run, incomplete_only):
+    """Remove downloaded NetCDF files.
+
+    Without --var, only known variable folders in OUTDIR that contain files are cleaned.
+    """
+    selected = list(vars_) if vars_ else list(VARS)
+
+    targets: List[Path] = []
     for var in selected:
         var_dir = outdir / var
-        if var_dir.exists():
-            for fp in list(var_dir.glob("*.nc")) + list(var_dir.glob("*.nc.part")):
-                if dry_run:
-                    console.print(f"Would remove {fp}")
-                else:
-                    fp.unlink()
-                removed += 1
-            if not dry_run:
-                try:
-                    var_dir.rmdir()
-                except OSError:
-                    pass
-    
+        if not var_dir.is_dir():
+            continue
+        for fp in sorted(var_dir.glob("*.nc")) + sorted(var_dir.glob("*.nc.part")):
+            if incomplete_only and fp.suffix == ".nc" and is_complete_netcdf(fp):
+                continue
+            targets.append(fp)
+
+    if not targets:
+        console.print("Nothing to clean")
+        return
+
+    found_vars = [v for v in selected if any(fp.parent.name == v for fp in targets)]
+    kind = "incomplete" if incomplete_only else "all"
+
     if dry_run:
-        console.print(f"[bold yellow]Dry run:[/bold yellow] {removed} files would be removed")
-    else:
-        console.print(f"[bold green]Removed[/bold green] {removed} files")
+        for fp in targets:
+            console.print(f"Would remove {fp}")
+        console.print(f"[bold yellow]Dry run:[/bold yellow] {len(targets)} files would be removed")
+        return
+
+    if not yes:
+        if not click.confirm(f"Delete {len(targets)} {kind} files for {', '.join(found_vars)} in {outdir}?"):
+            ctx.exit(0)
+
+    for fp in targets:
+        fp.unlink()
+    for var in found_vars:
+        try:
+            (outdir / var).rmdir()
+        except OSError:
+            pass
+
+    console.print(f"[bold green]Removed[/bold green] {len(targets)} files")
