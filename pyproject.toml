@@ -42,9 +42,6 @@ build-backend = "setuptools.build_meta"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-markers = [
-    "integration: marks integration tests (slow, requires network)",
-]
 
 [tool.coverage.run]
 source = ["chessmet"]

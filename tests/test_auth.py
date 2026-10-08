@@ -78,3 +78,22 @@ def test_403_points_to_licence_acceptance(mock_get, tmp_path):
 
     assert mock_get.call_count == 1
     assert "licence" in res.error and DATASET_URL in res.error
+
+
+@patch("chessmet.download.time.sleep")
+@patch("requests.Session.get")
+def test_401_in_parallel_run_stops_remaining_files(mock_get, _sleep, tmp_path):
+    from rich.console import Console
+    from rich.progress import Progress
+
+    _mock_status(mock_get, 401)
+    dl = ChessMetDownloader(ChessMetConfig(token="pat_secret", rate_limit_delay=0))
+    todo = [(f"http://x/{i}.nc", tmp_path / f"{i}.nc") for i in range(6)]
+    results = dl.download_var_parallel(
+        "tas", todo, tmp_path, num_workers=1, progress=Progress(console=Console(quiet=True))
+    )
+
+    assert mock_get.call_count == 1  # one worker: only the first file reaches the server
+    assert not any(r.success for r in results)
+    assert "expired" in results[0].error
+    assert all("Skipped" in r.error for r in results[1:])

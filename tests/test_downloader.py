@@ -180,7 +180,9 @@ class TestParallelDownload:
             progress=Progress(console=Console(quiet=True)),
         )
         
-        assert serial_results[0].success == parallel_results[0].success
+        assert serial_results[0].success and parallel_results[0].success
+        assert serial_results[0].size_bytes == parallel_results[0].size_bytes
+        assert serial_results[0].filepath.read_bytes() == parallel_results[0].filepath.read_bytes()
 
     @patch("requests.Session.get")
     def test_parallel_with_multiple_workers(self, mock_get, downloader, temp_dir, mock_response):
