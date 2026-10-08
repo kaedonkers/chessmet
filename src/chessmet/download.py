@@ -74,6 +74,10 @@ class AuthenticationError(RuntimeError):
     """Server rejected the credentials (401/403); retrying will not help."""
 
 
+class DownloadCancelled(Exception):
+    """The run was interrupted (Ctrl+C); in-flight downloads stop and queued ones never start."""
+
+
 def _env_token() -> Optional[str]:
     return (os.getenv("EIDC_TOKEN") or "").strip() or None
 
@@ -198,6 +202,7 @@ class ChessMetDownloader:
         self.config = config or ChessMetConfig()
         self._session: Optional[requests.Session] = None
         self._auth_failed = threading.Event()
+        self._cancel = threading.Event()
     
     @property
     def session(self) -> requests.Session:
@@ -222,6 +227,8 @@ class ChessMetDownloader:
         try:
             with open(part, "wb") as f:
                 for chunk in response.iter_content(chunk_size=self.config.chunk_size):
+                    if self._cancel.is_set():
+                        raise DownloadCancelled()
                     if chunk:
                         f.write(chunk)
             written = part.stat().st_size
@@ -279,6 +286,8 @@ class ChessMetDownloader:
                                         error="Skipped: authentication failed earlier"))
         
         for attempt in range(retry_attempts):
+            if self._cancel.is_set():
+                return (idx, DownloadResult(url=url, filepath=filepath, success=False, error="Cancelled"))
             try:
                 session = self._create_session_with_auth()
                 
@@ -299,6 +308,8 @@ class ChessMetDownloader:
                     url=url, filepath=filepath, success=True, size_bytes=actual_size
                 ))
             
+            except DownloadCancelled:
+                return (idx, DownloadResult(url=url, filepath=filepath, success=False, error="Cancelled"))
             except (requests.RequestException, RuntimeError, OSError) as e:
                 error_msg = str(e)
                 
@@ -406,6 +417,7 @@ class ChessMetDownloader:
             raise ValueError("progress must be provided")
         
         task_id = progress.add_task(f"[cyan]Downloading {var:<7}", total=len(tasks))
+        self._cancel.clear()
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
             future_to_idx = {
@@ -413,12 +425,20 @@ class ChessMetDownloader:
                 for task_item in tasks
             }
             
-            for future in concurrent.futures.as_completed(future_to_idx):
-                idx, result = future.result()
-                results_map[idx] = result
-                progress.advance(task_id, advance=1)
-                if grand_task is not None:
-                    progress.advance(grand_task, advance=1)
+            try:
+                for future in concurrent.futures.as_completed(future_to_idx):
+                    idx, result = future.result()
+                    results_map[idx] = result
+                    progress.advance(task_id, advance=1)
+                    if grand_task is not None:
+                        progress.advance(grand_task, advance=1)
+            except KeyboardInterrupt:
+                # One Ctrl+C stops everything: drop queued files and tell running workers to stop
+                # at their next chunk (they remove their own .part file). Leaving the `with` block
+                # then waits only for that, instead of for every remaining download.
+                self._cancel.set()
+                executor.shutdown(wait=False, cancel_futures=True)
+                raise
         
         # Note: no progress.remove_task(task_id) — keeps completed bar visible
         
