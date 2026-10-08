@@ -1,7 +1,7 @@
 # ---
 # created: 28 July 2026
-# author: Lumo2.0, kaedonkers
-# modified: 28 July 2026
+# author: Lumo2.0, kaedonkers, Claude Sonnet 5.5
+# modified: 08 October 2026
 # ---
 """Test downloader functionality without hitting the real server."""
 import pytest
@@ -9,13 +9,15 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import requests
+from rich.console import Console
+from rich.progress import Progress
 import concurrent.futures
 from chessmet.download import (
     ChessMetDownloader,
     ChessMetConfig,
     DownloadResult,
-    MIN_COMPLETE_BYTES,
 )
+from conftest import make_hdf5
 
 class TestDownloadVar:
     """Test download_var method."""
@@ -37,17 +39,17 @@ class TestDownloadVar:
         # Non-existent file
         assert not downloader._file_exists_locally(filepath)
         
-        # Small file (incomplete)
+        # Not a NetCDF-4 file
         filepath.parent.mkdir(parents=True, exist_ok=True)
         filepath.write_bytes(b"x" * 1000)
         assert not downloader._file_exists_locally(filepath)
         
-        # Partial download just under the threshold is still incomplete
-        filepath.write_bytes(b"x" * (MIN_COMPLETE_BYTES - 1))
+        # Truncated NetCDF-4 file
+        filepath.write_bytes(make_hdf5(eof=5000)[:4000])
         assert not downloader._file_exists_locally(filepath)
         
-        # Complete file (>= threshold)
-        filepath.write_bytes(b"x" * MIN_COMPLETE_BYTES)
+        # Complete NetCDF-4 file
+        filepath.write_bytes(make_hdf5(eof=5000))
         assert downloader._file_exists_locally(filepath)
     
     def test_prepare_filepath(self, downloader, temp_dir):
@@ -75,6 +77,7 @@ class TestDownloadVar:
             "tas",
             urls_and_paths,
             temp_dir,
+            progress=Progress(console=Console(quiet=True)),
         )
         
         assert len(results) == 1
@@ -88,7 +91,7 @@ class TestDownloadVar:
         # Pre-create a large file
         filepath = temp_dir / "tas" / "chess-met_tas_gb_1km_daily_19910101-19910131.nc"
         filepath.parent.mkdir(parents=True, exist_ok=True)
-        filepath.write_bytes(b"x" * MIN_COMPLETE_BYTES)
+        filepath.write_bytes(make_hdf5(eof=5000))
         
         urls_and_paths = [
             ("https://test.url/file.nc", filepath)
@@ -98,6 +101,7 @@ class TestDownloadVar:
             "tas",
             urls_and_paths,
             temp_dir,
+            progress=Progress(console=Console(quiet=True)),
         )
         
         assert len(results) == 1
@@ -124,6 +128,7 @@ class TestDownloadVar:
             "tas",
             urls_and_paths,
             temp_dir,
+            progress=Progress(console=Console(quiet=True)),
         )
         
         assert len(results) == 1
@@ -164,6 +169,7 @@ class TestParallelDownload:
             "tas",
             [("https://test.url/file.nc", temp_dir / "tas" / "test.nc")],
             temp_dir,
+            progress=Progress(console=Console(quiet=True)),
         )
         
         # Reset path for parallel
@@ -175,6 +181,7 @@ class TestParallelDownload:
             [("https://test.url/file.nc", filepath)],
             temp_dir,
             num_workers=1,
+            progress=Progress(console=Console(quiet=True)),
         )
         
         assert serial_results[0].success == parallel_results[0].success

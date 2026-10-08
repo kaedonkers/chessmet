@@ -1,3 +1,8 @@
+# ---
+# created: 08 October 2026
+# author: Claude Sonnet 5.5, kaedonkers
+# modified: 08 October 2026
+# ---
 """Manual check that EIDC_TOKEN works as a bearer token (NOT collected by pytest).
 
 Fetches the first chunk of one CHESS-MET file, or the whole file with --save.

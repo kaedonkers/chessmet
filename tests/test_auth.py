@@ -1,3 +1,9 @@
+# ---
+# created: 08 October 2026
+# author: kaedonkers, Claude Sonnet 5.5
+# modified: 08 October 2026
+# ---
+
 """Test token-only authentication and failure handling."""
 from unittest.mock import MagicMock, patch
 
