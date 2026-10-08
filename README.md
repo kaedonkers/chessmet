@@ -70,7 +70,7 @@ pipx install --force git+https://github.com/kaedonkers/chessmet
 chessmet download --var tas --start 1989 --end 2005
 
 # Download multiple variables in parallel
-chessmet download --var tas --var precip --start 2000 --workers 4
+chessmet download --vars tas,precip --start 2000 --workers 4   # or: --var tas --var precip
 
 # A single month, or a range of months (a day, e.g. 20000315, is rounded to its month)
 chessmet download --var tas --start 200003

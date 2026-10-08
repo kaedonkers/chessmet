@@ -116,6 +116,24 @@ def _period_option(ctx, param, value):
     return value
 
 
+VARS_HELP = f"Variable(s): {', '.join(VARS)}. Repeat the option or comma-separate (--vars tas,precip). Default: all."
+
+
+def _vars_option(ctx, param, value):
+    """Click callback: flatten repeated/comma-separated values and validate them."""
+    out = []
+    for item in value:
+        for name in item.split(","):
+            name = name.strip()
+            if not name:
+                continue
+            if name not in VARS:
+                raise click.BadParameter(f"{name!r} is not one of: {', '.join(VARS)}")
+            if name not in out:
+                out.append(name)
+    return tuple(out)
+
+
 def _resolve_period(config, start, end, verb):
     """Turn --start/--end text into clamped ((year, month), (year, month)) bounds.
 
@@ -162,7 +180,7 @@ def cli(ctx, verbose, log_file):
     _configure_logging(verbose, log_file)
 
 @cli.command(no_args_is_help=True)
-@click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
+@click.option("--var", "--vars", "vars_", multiple=True, callback=_vars_option, metavar="VAR[,VAR...]", help=VARS_HELP)
 @click.option("-s", "--start", default=None, callback=_period_option, help=f"First month (required). {PERIOD_HELP}")
 @click.option("-e", "--end", default=None, callback=_period_option,
               help="Last month. Defaults to the end of the --start period (a year gives December).")
@@ -229,7 +247,7 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
                     console.print(f"    {r.error}")
 
 @cli.command()
-@click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
+@click.option("--var", "--vars", "vars_", multiple=True, callback=_vars_option, metavar="VAR[,VAR...]", help=VARS_HELP)
 @click.option("-s", "--start", default=None, callback=_period_option,
               help=f"First month. {PERIOD_HELP} Defaults to the first available month.")
 @click.option("-e", "--end", default=None, callback=_period_option,
@@ -264,7 +282,7 @@ def status(ctx, vars_, start, end, outdir):
     console.print(f"[bold green]{present}[/bold green] present ✓ | [yellow]{incomplete}[/yellow] incomplete ~ | [bold red]{missing}[/bold red] missing ✗")
 
 @cli.command()
-@click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
+@click.option("--var", "--vars", "vars_", multiple=True, callback=_vars_option, metavar="VAR[,VAR...]", help=VARS_HELP)
 @click.option("-o", "--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
 @click.option("-y", "--yes", is_flag=True, default=False)
 @click.option("-i", "--incomplete-only", is_flag=True, help="Only remove incomplete files (truncated .nc and leftover .part files).")

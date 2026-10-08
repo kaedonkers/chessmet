@@ -162,3 +162,15 @@ def test_default_console_is_quiet_and_v_shows_errors(runner, tmp_path, monkeypat
         loud = runner.invoke(cli, ["-v"] + _download_args(tmp_path))
     assert "HTTP 500" not in quiet.output
     assert "HTTP 500" in loud.output
+
+
+def test_vars_accepts_comma_list_repeats_and_alias(runner, tmp_path, monkeypatch):
+    monkeypatch.setenv("EIDC_TOKEN", "pat_abc")
+    with patch("chessmet.cli.ChessMetDownloader.download_all_vars", return_value={}) as m:
+        runner.invoke(cli, ["download", "--vars", "tas,precip", "--var", "rsds,tas", "-s", "2000", "-o", str(tmp_path)])
+    assert m.call_args.kwargs["vars_"] == ["tas", "precip", "rsds"]
+
+
+def test_vars_rejects_unknown_name(runner, tmp_path):
+    res = runner.invoke(cli, ["download", "--vars", "tas,nope", "-s", "2000", "-o", str(tmp_path)])
+    assert res.exit_code == 2 and "nope" in res.output
