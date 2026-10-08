@@ -69,4 +69,3 @@ You can also run the module directly:
 ```bash
 python -m chessmet --help
 ```
-
