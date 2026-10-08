@@ -61,6 +61,7 @@ chessmet clean --var tas --yes
 chessmet clean --var tas --dry-run   # list what would be removed, delete nothing
 chessmet clean --incomplete-only --dry-run   # only truncated files and leftover .part files
 chessmet clean --var tas --remove-dirs --yes   # also remove the emptied tas/ folder
+chessmet clean --var tas --force --yes   # remove tas/ even if it holds other files
 ```
 
 You can also run the module directly:

@@ -23,6 +23,7 @@ import calendar
 import concurrent.futures
 import logging
 import os
+import shutil
 import sys
 import time
 from dataclasses import dataclass
@@ -208,12 +209,16 @@ def status(ctx, vars_, start, end, outdir):
 @click.option("--dry-run", is_flag=True, help="List files that would be removed without deleting them.")
 @click.option("--incomplete-only", is_flag=True, help="Only remove incomplete files (truncated .nc and leftover .part files).")
 @click.option("--remove-dirs", is_flag=True, help="Also remove the variable subfolders from OUTDIR once empty.")
+@click.option("--force", is_flag=True, help="Remove variable subfolders even if they contain other files (implies --remove-dirs).")
 @click.pass_context
-def clean(ctx, vars_, outdir, yes, dry_run, incomplete_only, remove_dirs):
+def clean(ctx, vars_, outdir, yes, dry_run, incomplete_only, remove_dirs, force):
     """Remove downloaded NetCDF files.
 
     Without --var, only known variable folders in OUTDIR are cleaned.
     """
+    if force and incomplete_only:
+        raise click.UsageError("--force cannot be combined with --incomplete-only")
+    remove_dirs = remove_dirs or force
     selected = list(vars_) if vars_ else list(VARS)
 
     targets: List[Path] = []
@@ -228,11 +233,11 @@ def clean(ctx, vars_, outdir, yes, dry_run, incomplete_only, remove_dirs):
                 continue
             targets.append(fp)
 
-    # A folder is removable only if nothing but the targeted files would remain
+    # Without --force, a folder is removable only if nothing but the targeted files would remain
     removable = [
         d for d in var_dirs
-        if remove_dirs and set(d.iterdir()) <= {fp for fp in targets if fp.parent == d}
-    ] if remove_dirs else []
+        if remove_dirs and (force or set(d.iterdir()) <= {fp for fp in targets if fp.parent == d})
+    ]
     kept = [d for d in var_dirs if remove_dirs and d not in removable]
 
     if not targets and not removable:
@@ -243,7 +248,7 @@ def clean(ctx, vars_, outdir, yes, dry_run, incomplete_only, remove_dirs):
         for fp in targets:
             console.print(f"Would remove {fp}")
         for d in removable:
-            console.print(f"Would remove folder {d}")
+            console.print(f"Would remove folder {d}" + (" (and all contents)" if force else ""))
         console.print(f"[bold yellow]Dry run:[/bold yellow] {len(targets)} files and {len(removable)} folders would be removed")
         return
 
@@ -257,7 +262,10 @@ def clean(ctx, vars_, outdir, yes, dry_run, incomplete_only, remove_dirs):
     for fp in targets:
         fp.unlink()
     for d in removable:
-        d.rmdir()
+        if force:
+            shutil.rmtree(d)
+        else:
+            d.rmdir()
 
     msg = f"[bold green]Removed[/bold green] {len(targets)} files"
     if remove_dirs:
