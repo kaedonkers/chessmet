@@ -188,6 +188,8 @@ def status(ctx, vars_, start, end, outdir):
                         present += 1
                     else:
                         incomplete += 1
+                elif fp.with_name(fp.name + ".part").exists():
+                    incomplete += 1
                 else:
                     missing += 1
     
