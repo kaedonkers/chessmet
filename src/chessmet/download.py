@@ -85,6 +85,52 @@ ALLOWED_HOST = "catalogue.ceh.ac.uk"  # the token is only ever sent here
 DATASET_URL = "https://doi.org/10.5285/835a50df-e74f-4bfb-b593-804fd61d5eab"
 
 
+def parse_period(value, end: bool = False) -> Tuple[int, int]:
+    """Parse YYYY, YYYYMM or YYYYMMDD into a (year, month).
+
+    Files are monthly, so a day is coerced to the month containing it. A bare year means
+    January when `end` is False and December when `end` is True.
+    """
+    text = str(value).strip()
+    if not text.isdigit() or len(text) not in (4, 6, 8):
+        raise ValueError(f"'{value}' is not YYYY, YYYYMM or YYYYMMDD")
+    year = int(text[:4])
+    month = int(text[4:6]) if len(text) >= 6 else (12 if end else 1)
+    if not 1 <= month <= 12:
+        raise ValueError(f"'{value}' has an invalid month ({month})")
+    if len(text) == 8 and not 1 <= int(text[6:]) <= calendar.monthrange(year, month)[1]:
+        raise ValueError(f"'{value}' has an invalid day ({text[6:]})")
+    return year, month
+
+
+def month_range(start: Tuple[int, int], end: Tuple[int, int]):
+    """Yield (year, month) from start to end inclusive."""
+    year, month = start
+    while (year, month) <= end:
+        yield year, month
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+
+
+def resolve_months(
+    start_year: int,
+    end_year: Optional[int],
+    start_month: Optional[int],
+    end_month: Optional[int],
+) -> Tuple[int, int, int, int]:
+    """Fill in omitted end year and months the way the CLI does.
+
+    A bare year is the whole year. A start month with no end year and no end month is just that
+    month. An end year with no end month runs to December.
+    """
+    if end_year is None:
+        end_year = start_year
+        if end_month is None:
+            end_month = start_month if start_month is not None else 12
+    elif end_month is None:
+        end_month = 12
+    return start_year, end_year, start_month if start_month is not None else 1, end_month
+
+
 @dataclass
 class ChessMetConfig:
     """Configuration for CHESS-MET download."""
@@ -126,9 +172,11 @@ class ChessMetConfig:
         if var not in self.valid_vars:
             raise ValueError(f"Variable '{var}' not in valid list {self.valid_vars}")
 
-    def validate_years(self, start_year: int, end_year: int):
-        if start_year > end_year:
-            raise ValueError(f"start_year ({start_year}) > end_year ({end_year})")
+    def validate_years(self, start_year: int, end_year: int, start_month: int = 1, end_month: int = 12):
+        if (start_year, start_month) > (end_year, end_month):
+            raise ValueError(
+                f"start ({start_year}-{start_month:02d}) is after end ({end_year}-{end_month:02d})"
+            )
         if start_year < self.min_year:
             raise ValueError(f"start_year ({start_year}) before valid range (min: {self.min_year})")
         if end_year > self.max_year:
@@ -387,20 +435,26 @@ class ChessMetDownloader:
         num_workers: int = 1,
         progress: Optional[Progress] = None,
         grand_task: Optional[int] = None,
+        start_month: Optional[int] = None,
+        end_month: Optional[int] = None,
     ) -> List[DownloadResult]:
-        """Download all monthly files for a single variable."""
-        end_year = start_year if end_year is None else end_year
+        """Download the monthly files for a single variable.
+
+        The range runs from start_year/start_month to end_year/end_month inclusive.
+        Omitted values are filled in as by `resolve_months`: year only means the whole year, and
+        a start month alone means just that month.
+        """
+        start_year, end_year, start_month, end_month = resolve_months(start_year, end_year, start_month, end_month)
         
         self.config.validate_vars(var)
-        self.config.validate_years(start_year, end_year)
+        self.config.validate_years(start_year, end_year, start_month, end_month)
         
         urls_and_paths = []
-        for year in range(start_year, end_year + 1):
-            for month in range(1, 13):
-                url = self._build_url(var, year, month)
-                filepath = self._prepare_filepath(outdir, var, year, month)
-                if not skip_existing or not self._file_exists_locally(filepath):
-                    urls_and_paths.append((url, filepath))
+        for year, month in month_range((start_year, start_month), (end_year, end_month)):
+            url = self._build_url(var, year, month)
+            filepath = self._prepare_filepath(outdir, var, year, month)
+            if not skip_existing or not self._file_exists_locally(filepath):
+                urls_and_paths.append((url, filepath))
         
         if not urls_and_paths:
             logger.info(f"All files for {var} already exist in {outdir}/{var}")
@@ -422,20 +476,21 @@ class ChessMetDownloader:
         skip_existing: bool = True,
         parallel: bool = True,
         num_workers: int = 2,
+        start_month: Optional[int] = None,
+        end_month: Optional[int] = None,
     ) -> dict:
         """Download multiple variables with grand progress bar."""
         vars_ = vars_ or list(self.config.valid_vars)
-        end_year = start_year if end_year is None else end_year
+        start_year, end_year, start_month, end_month = resolve_months(start_year, end_year, start_month, end_month)
         results = {}
         
         # Count ALL files that need downloading
         total_tasks = 0
         for var in vars_:
-            for year in range(start_year, (end_year + 1)):
-                for month in range(1, 13):
-                    filepath = self._prepare_filepath(outdir, var, year, month)
-                    if (not skip_existing) or (not self._file_exists_locally(filepath)):
-                        total_tasks += 1
+            for year, month in month_range((start_year, start_month), (end_year, end_month)):
+                filepath = self._prepare_filepath(outdir, var, year, month)
+                if (not skip_existing) or (not self._file_exists_locally(filepath)):
+                    total_tasks += 1
         
         with Progress(
             SpinnerColumn(),
@@ -454,6 +509,8 @@ class ChessMetDownloader:
                     var=var,
                     start_year=start_year,
                     end_year=end_year,
+                    start_month=start_month,
+                    end_month=end_month,
                     outdir=outdir,
                     skip_existing=skip_existing,
                     parallel=parallel,

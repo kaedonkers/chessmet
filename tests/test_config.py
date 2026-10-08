@@ -12,7 +12,42 @@ import pytest
 from click.testing import CliRunner
 
 from chessmet.cli import cli
-from chessmet.download import OUTDIR_DEFAULT, VARS, YEARS, ChessMetConfig
+from chessmet.download import OUTDIR_DEFAULT, VARS, YEARS, ChessMetConfig, month_range, parse_period, resolve_months
+
+
+@pytest.mark.parametrize("text, end, expected", [
+    ("2000", False, (2000, 1)),
+    ("2000", True, (2000, 12)),
+    ("200003", False, (2000, 3)),
+    ("200003", True, (2000, 3)),
+    ("20000315", False, (2000, 3)),
+    ("20000315", True, (2000, 3)),
+    (2000, True, (2000, 12)),
+])
+def test_parse_period(text, end, expected):
+    assert parse_period(text, end=end) == expected
+
+
+@pytest.mark.parametrize("text", ["20", "20000", "2000-03", "abc", "200013", "200000", "20000230", "20000300"])
+def test_parse_period_rejects(text):
+    with pytest.raises(ValueError):
+        parse_period(text)
+
+
+@pytest.mark.parametrize("args, expected", [
+    ((2005, None, None, None), (2005, 2005, 1, 12)),
+    ((2005, 2006, None, None), (2005, 2006, 1, 12)),
+    ((2005, None, 3, None), (2005, 2005, 3, 3)),
+    ((2005, None, 3, 7), (2005, 2005, 3, 7)),
+    ((2005, 2006, 3, None), (2005, 2006, 3, 12)),
+    ((2005, 2006, 3, 7), (2005, 2006, 3, 7)),
+])
+def test_resolve_months_matches_cli_rules(args, expected):
+    assert resolve_months(*args) == expected
+
+
+def test_month_range_crosses_year_boundary():
+    assert list(month_range((2000, 11), (2001, 2))) == [(2000, 11), (2000, 12), (2001, 1), (2001, 2)]
 
 
 def test_config_defaults():
@@ -45,7 +80,7 @@ def test_validate_years_accepts_range_and_boundaries(start, end):
     (1960, 1970, "before valid range"),
     (2020, 2025, "after valid range"),
     (2010, 2020, "after valid range"),
-    (2010, 2005, r"start_year \(2010\) > end_year \(2005\)"),
+    (2010, 2005, "is after end"),
 ])
 def test_validate_years_rejects(start, end, match):
     with pytest.raises(ValueError, match=match):

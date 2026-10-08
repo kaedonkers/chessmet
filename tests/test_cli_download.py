@@ -8,6 +8,8 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from chessmet.cli import cli
 from chessmet.download import DownloadResult
 
@@ -35,6 +37,47 @@ def test_end_defaults_to_start(mock_dl, runner, tmp_path, monkeypatch):
     res = runner.invoke(cli, ["download", "--var", "tas", "-s", "2005", "-o", str(tmp_path)])
     assert res.exit_code == 0
     assert mock_dl.call_args.kwargs["start_year"] == mock_dl.call_args.kwargs["end_year"] == 2005
+
+
+# ── start / end formats ────────────────────────────────────────
+
+@pytest.mark.parametrize("start, end, expected", [
+    ("2005", None, ((2005, 1), (2005, 12))),
+    ("2005", "2006", ((2005, 1), (2006, 12))),
+    ("200503", None, ((2005, 3), (2005, 3))),
+    ("200503", "200507", ((2005, 3), (2005, 7))),
+    ("20050315", "20050720", ((2005, 3), (2005, 7))),
+    ("200511", "2006", ((2005, 11), (2006, 12))),
+])
+def test_start_end_formats(runner, tmp_path, monkeypatch, start, end, expected):
+    monkeypatch.setenv("EIDC_TOKEN", "pat_abc")
+    args = ["download", "--var", "tas", "-s", start, "-o", str(tmp_path)] + (["-e", end] if end else [])
+    with patch("chessmet.cli.ChessMetDownloader.download_all_vars", return_value={}) as mock_dl:
+        res = runner.invoke(cli, args)
+    assert res.exit_code == 0, res.output
+    kw = mock_dl.call_args.kwargs
+    assert ((kw["start_year"], kw["start_month"]), (kw["end_year"], kw["end_month"])) == expected
+
+
+@pytest.mark.parametrize("bad", ["20", "2005-03", "200513", "20050231"])
+def test_bad_start_is_a_usage_error(runner, tmp_path, bad):
+    res = runner.invoke(cli, ["download", "--var", "tas", "-s", bad, "-o", str(tmp_path), "--dry-run"])
+    assert res.exit_code == 2
+    assert "Invalid value for '-s'" in res.output
+
+
+def test_start_after_end_is_a_usage_error(runner, tmp_path):
+    res = runner.invoke(cli, ["download", "--var", "tas", "-s", "200607", "-e", "200506", "-o", str(tmp_path), "--dry-run"])
+    assert res.exit_code == 2
+    assert "after --end" in res.output
+
+
+def test_dry_run_lists_only_requested_months(runner, tmp_path):
+    res = runner.invoke(cli, ["download", "--var", "tas", "-s", "20000315", "-e", "200005", "-o", str(tmp_path), "--dry-run"])
+    assert res.exit_code == 0
+    assert res.output.count("DOWNLOAD") == 3
+    assert "20000301-20000331" in res.output and "20000501-20000531" in res.output
+    assert "20000201" not in res.output and "20000601" not in res.output
 
 
 # ── token handling ─────────────────────────────────────────────

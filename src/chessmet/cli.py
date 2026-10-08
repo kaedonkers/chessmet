@@ -48,7 +48,7 @@ from chessmet import __version__
 # `console` is shared with download.py: the progress bar and the log handler must use the same Console,
 # otherwise log lines are drawn over the bar instead of above it.
 from chessmet.download import (
-    OUTDIR_DEFAULT, VARS, YEARS,
+    OUTDIR_DEFAULT, VARS, month_range, parse_period,
     ChessMetConfig, ChessMetDownloader, DownloadResult, TOKEN_PREFIX, TOKENS_URL, console, is_complete_netcdf
     )
 
@@ -103,6 +103,45 @@ def _configure_logging(verbose: int, log_file: Optional[Path]) -> None:
     pkg_logger.setLevel(logging.DEBUG)  # handlers do the filtering
 
 
+PERIOD_HELP = "YYYY, YYYYMM or YYYYMMDD. Files are monthly, so a day is rounded to its month."
+
+
+def _period_option(ctx, param, value):
+    """Click callback: keep the raw text, but reject malformed values with a usage error."""
+    if value is not None:
+        try:
+            parse_period(value)
+        except ValueError as e:
+            raise click.BadParameter(str(e))
+    return value
+
+
+def _resolve_period(config, start, end, verb):
+    """Turn --start/--end text into clamped ((year, month), (year, month)) bounds.
+
+    start defaults to the first available month. A bare year as end means December, and end
+    defaults to the end of the period that start names (so `-s 2005` is the whole of 2005).
+    """
+    first, last = (config.min_year, 1), (config.max_year, 12)
+    first_ym = parse_period(start) if start is not None else first
+    last_ym = parse_period(end, end=True) if end is not None else (
+        parse_period(start, end=True) if start is not None else last
+    )
+    if first_ym > last_ym:
+        raise click.UsageError(f"--start ({start}) is after --end ({end}).")
+    if first_ym < first:
+        console.print(f"[bold orange1]WARNING:[/bold orange1] {start} is before {first[0]}-{first[1]:02d}: {verb} start={first[0]}-{first[1]:02d}")
+        first_ym = first
+    if last_ym > last:
+        console.print(f"[bold orange1]WARNING:[/bold orange1] {end or start} is after {last[0]}-{last[1]:02d}: {verb} end={last[0]}-{last[1]:02d}")
+        last_ym = last
+    return first_ym, last_ym
+
+
+def _fmt_period(first_ym, last_ym):
+    return f"{first_ym[0]}-{first_ym[1]:02d} – {last_ym[0]}-{last_ym[1]:02d}"
+
+
 @click.group()
 @click.option("-v", "--verbose", count=True,
               help="Show warnings and errors as they happen (-v), progress (-vv), debug (-vvv).")
@@ -119,8 +158,9 @@ def cli(ctx, verbose, log_file):
 
 @cli.command(no_args_is_help=True)
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
-@click.option("-s", "--start", type=int, default=None, help="First year (required).")
-@click.option("-e", "--end", type=int, default=None, help="Last year. Defaults to --start.")
+@click.option("-s", "--start", default=None, callback=_period_option, help=f"First month (required). {PERIOD_HELP}")
+@click.option("-e", "--end", default=None, callback=_period_option,
+              help="Last month. Defaults to the end of the --start period (a year gives December).")
 @click.option("-o", "--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
 @click.option("-w", "--workers", type=int, default=1, show_default=True)
 @click.option("--no-skip", "--overwrite", "skip_existing", flag_value=False, default=True)
@@ -131,22 +171,16 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
     selected = list(vars_) if vars_ else VARS
     if start is None:
         raise click.UsageError("--start is required (e.g. --start 2000).")
-    end = start if end is None else end
 
     config = ChessMetConfig(valid_vars=tuple(selected), max_workers=workers)
     if not dry_run:
         _ensure_credentials(ctx, config)
     # if some vars invalid: console.print(warning)
     # if *no* vars valid: console.print(error) and exit
-    if start < config.min_year:
-        console.print(f"[bold orange1]WARNING:[/bold orange1] {start} < {config.min_year}: Using start={config.min_year}")
-        start = config.min_year
-    if end > config.max_year:
-        console.print(f"[bold orange1]WARNING:[/bold orange1] {end} > {config.max_year}: Using   end={config.max_year}")
-        end = config.max_year
+    (sy, sm), (ey, em) = _resolve_period(config, start, end, "Using")
 
     console.print(f"[bold green]Downloading CHESS-MET files[/bold green]")
-    console.print(f"[dim]Years: [/dim] {start}–{end}")
+    console.print(f"[dim]Period:[/dim] {_fmt_period((sy, sm), (ey, em))}")
     console.print(f"[dim]Vars:  [/dim] [bold magenta]{'[/bold magenta]  [bold magenta]'.join(selected)}[/bold magenta]")
     console.print(f"[dim]Outdir:[/dim] {outdir.resolve()}")
     
@@ -154,11 +188,10 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
         console.print("\n[yellow][DRY RUN][/yellow]")
         dl = ChessMetDownloader(config=config)
         for var in selected:
-            for year in range(start, end + 1):
-                for month in range(1, 13):
-                    filepath = dl._prepare_filepath(outdir, var, year, month)
-                    status = "[dim]SKIP[/dim]" if dl._file_exists_locally(filepath) else "[green]DOWNLOAD[/green]"
-                    console.print(f"  {status} {filepath.relative_to(outdir)}")
+            for year, month in month_range((sy, sm), (ey, em)):
+                filepath = dl._prepare_filepath(outdir, var, year, month)
+                status = "[dim]SKIP[/dim]" if dl._file_exists_locally(filepath) else "[green]DOWNLOAD[/green]"
+                console.print(f"  {status} {filepath.relative_to(outdir)}")
         return
     
     console.print(f"[dim]Mode:  [/dim] {'parallel (' + str(workers) + ' workers)' if workers > 1 else 'serial'}")
@@ -166,8 +199,10 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
     dl = ChessMetDownloader(config=config)
     results = dl.download_all_vars(
         vars_=selected, 
-        start_year=start, 
-        end_year=end, 
+        start_year=sy,
+        end_year=ey,
+        start_month=sm,
+        end_month=em,
         outdir=outdir, 
         skip_existing=skip_existing,
         parallel=(workers > 1), 
@@ -190,43 +225,36 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
 
 @cli.command()
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
-@click.option("-s", "--start", type=int, default=None)
-@click.option("-e", "--end", type=int, default=None)
+@click.option("-s", "--start", default=None, callback=_period_option,
+              help=f"First month. {PERIOD_HELP} Defaults to the first available month.")
+@click.option("-e", "--end", default=None, callback=_period_option,
+              help="Last month. Defaults to the end of the --start period, or the last available month.")
 @click.option("-o", "--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
 @click.pass_context
 def status(ctx, vars_, start, end, outdir):
     """Check which files exist locally vs. missing."""
     selected = list(vars_) if vars_ else VARS
-    start = start or YEARS[0]
-    end = end or YEARS[-1]
-
     config = ChessMetConfig(valid_vars=tuple(selected))
-    if start < config.min_year:
-        console.print(f"[bold orange1]WARNING:[/bold orange1] {start} < {config.min_year}: Checking status with start={config.min_year}")
-        start = config.min_year
-    if end > config.max_year:
-        console.print(f"[bold orange1]WARNING:[/bold orange1] {end} > {config.max_year}: Checking status with   end={config.max_year}")
-        end = config.max_year
+    (sy, sm), (ey, em) = _resolve_period(config, start, end, "Checking status with")
 
     dl = ChessMetDownloader(config=config)
     
     missing, present, incomplete = 0, 0, 0
     for var in selected:
-        for year in range(start or YEARS[0], (end or YEARS[-1]) + 1):
-            for month in range(1, 13):
-                fp = dl._prepare_filepath(outdir, var, year, month)
-                if fp.exists():
-                    if is_complete_netcdf(fp):
-                        present += 1
-                    else:
-                        incomplete += 1
-                elif fp.with_name(fp.name + ".part").exists():
-                    incomplete += 1
+        for year, month in month_range((sy, sm), (ey, em)):
+            fp = dl._prepare_filepath(outdir, var, year, month)
+            if fp.exists():
+                if is_complete_netcdf(fp):
+                    present += 1
                 else:
-                    missing += 1
+                    incomplete += 1
+            elif fp.with_name(fp.name + ".part").exists():
+                incomplete += 1
+            else:
+                missing += 1
     
     console.print(f"Status of downloaded files")
-    console.print(f"Years: {start}–{end}")
+    console.print(f"Period: {_fmt_period((sy, sm), (ey, em))}")
     console.print(f"Vars : [bold magenta]{'[/bold magenta]  [bold magenta]'.join(selected)}[/bold magenta]")
     console.print(f"[bold green]{present}[/bold green] present ✓ | [yellow]{incomplete}[/yellow] incomplete ~ | [bold red]{missing}[/bold red] missing ✗")
 

@@ -9,8 +9,8 @@ CHESS-MET is a 1 km daily meteorology dataset for Great Britain, stored as one N
 Check the dataset page above for the current variables, years and licence; the values below may go out of date.
 
 - **Variables:** `dtr`, `huss`, `precip`, `psurf`, `rlds`, `rsds`, `sfcWind`, `tas`
-- **Years:** 1961–2019
-- **Defaults:** all variables if `--var` is omitted. `--start` is required; `--end` defaults to `--start`. Running `chessmet download` with no options shows the help
+- **Period:** 1961–2019. Files are monthly, so `--start`/`--end` accept `YYYY`, `YYYYMM` or `YYYYMMDD` (a day is rounded to its month)
+- **Defaults:** all variables if `--var` is omitted. `--start` is required; `--end` defaults to the end of the `--start` period (`-s 2005` is all of 2005, `-s 200503` is just March 2005). Running `chessmet download` with no options shows the help
 - **Size:** roughly 90–100 MB per file, so one variable for the full period is tens of GB. Check your disk space first.
 
 Files are saved as `<outdir>/<var>/chess-met_<var>_gb_1km_daily_<YYYYMMDD>-<YYYYMMDD>.nc`
@@ -71,6 +71,10 @@ chessmet download --var tas --start 1989 --end 2005
 
 # Download multiple variables in parallel
 chessmet download --var tas --var precip --start 2000 --workers 4
+
+# A single month, or a range of months (a day, e.g. 20000315, is rounded to its month)
+chessmet download --var tas --start 200003
+chessmet download --var tas --start 200003 --end 200105
 
 # Show planned downloads without downloading
 chessmet download --var rsds --start 2000 --end 2001 --dry-run
