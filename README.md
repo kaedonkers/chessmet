@@ -6,18 +6,26 @@ https://catalogue.ceh.ac.uk/documents/835a50df-e74f-4bfb-b593-804fd61d5eab
 
 ## Setup
 
-### 1) Create credentials file
+### 1) Authentication
 
-Create a local `.env` file in the repository root:
+Create a personal access token in your EIDC account and put it in a local `.env` file in the repository root:
 
 ```env
-EIDC_USERNAME=your_username
-EIDC_PASSWORD=your_password
+EIDC_TOKEN=your_personal_access_token
 # Optional:
 # EIDC_BASE_URL=https://catalogue.ceh.ac.uk/datastore/eidchub/835a50df-e74f-4bfb-b593-804fd61d5eab
 ```
 
-`.env` is ignored by git.
+`.env` is ignored by git. The token is sent as `Authorization: Bearer <token>`.
+Tokens expire (up to 364 days). A `401` means the token was rejected: create a new one at
+https://catalogue.ceh.ac.uk/sso/tokens and update `EIDC_TOKEN`.
+A `403` usually means you have not yet accepted the dataset licence: open
+https://doi.org/10.5285/835a50df-e74f-4bfb-b593-804fd61d5eab, choose "Download the data" and accept it (one-time).
+EIDC tokens normally start with `pat_`; the CLI warns if yours does not.
+
+If `EIDC_TOKEN` is not set and you run in an interactive terminal, the CLI prompts for the token
+(hidden input). It is held in memory only and never stored. Username/password authentication is
+no longer supported by the EIDC for programmatic downloads.
 
 ### 2) Install with pixi (recommended)
 
