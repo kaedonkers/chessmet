@@ -7,7 +7,7 @@
 name = "chessmet"
 authors = [{name = "Kevin Donkers", email = "k.donkers@exeter.ac.uk"}]
 requires-python = ">= 3.11"
-dynamic = ["version"]
+version = "0.3.0"
 dependencies = [
     "requests",
     "python-dotenv",
@@ -19,8 +19,7 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-cov",
-    "black",
-    "mypy",
+    "ruff",
 ]
 
 [project.scripts]
@@ -28,9 +27,6 @@ chessmet = "chessmet.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.dynamic]
-version = {attr = "chessmet.__version__"}
 
 [build-system]
 requires = ["setuptools>=77", "wheel"]
@@ -47,6 +43,13 @@ markers = [
     "live: talks to the real EIDC server with your real token (opt in with: pytest -m live)",
 ]
 
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["F", "I"]
+
 [tool.coverage.run]
 source = ["chessmet"]
 omit = ["*/tests/*", "*/__main__.py"]
@@ -59,11 +62,19 @@ omit = ["*/tests/*", "*/__main__.py"]
 [tool.pixi.workspace]
 channels = ["conda-forge", "apple"]
 platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+preview = ["pixi-build"]
 
 [tool.pixi.dependencies]
 
 [tool.pixi.pypi-dependencies]
 chessmet = { path = ".", editable = true }
+
+[tool.pixi.package.build]
+backend = { name = "pixi-build-python", version = "*" }
+
+[tool.pixi.package.host-dependencies]
+setuptools = ">=77"
+wheel = "*"
 
 [tool.pixi.tasks]
 chessmet = "chessmet"
@@ -75,8 +86,8 @@ tests = { features = ["pytest"], solve-group = "default" }
 [tool.pixi.feature.pytest.dependencies]
 pytest = "*"
 pytest-cov = "*"
-black = "*"
-mypy = "*"
+ruff = "*"
 
 [tool.pixi.feature.pytest.tasks]
 tests = "pytest tests"
+lint = "ruff check src tests"

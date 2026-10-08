@@ -12,6 +12,8 @@ import requests
 from rich.console import Console
 from rich.progress import Progress
 
+from chessmet.download import DownloadCancelled, DownloadResult
+
 
 def test_build_url(downloader):
     """Test URL building for different dates."""
@@ -234,3 +236,42 @@ def test_html_login_page_is_an_error_not_a_file(mock_get, downloader, tmp_path, 
 
     assert not res.success and "HTML" in res.error
     assert not res.filepath.exists()
+
+
+# ── Ctrl+C ─────────────────────────────────────────────────────
+
+def test_ctrl_c_cancels_queued_files_and_running_workers(downloader, temp_dir):
+    """One KeyboardInterrupt in the main thread stops the whole parallel run."""
+    started = []
+
+    def worker(task):
+        started.append(task[0])
+        # a running worker only returns once told to stop
+        assert downloader._cancel.wait(timeout=5)
+        return (task[0], DownloadResult(url=task[1], filepath=task[2], success=False, error="Cancelled"))
+
+    pairs = [(f"https://test.url/{i}.nc", temp_dir / f"{i}.nc") for i in range(6)]
+    with patch.object(downloader, "download_worker", side_effect=worker), \
+         patch("concurrent.futures.as_completed", side_effect=KeyboardInterrupt), \
+         pytest.raises(KeyboardInterrupt):
+        downloader.download_var_parallel("tas", pairs, temp_dir, 2, progress=Progress(console=Console(quiet=True)))
+
+    assert downloader._cancel.is_set()
+    assert len(started) <= 2  # only the two running workers ever started; the other 4 were cancelled
+
+
+def test_cancelled_download_leaves_no_part_file(downloader, temp_dir, mock_response):
+    downloader._cancel.set()
+    target = temp_dir / "tas" / "file.nc"
+    with pytest.raises(DownloadCancelled):
+        downloader._stream_to_file(mock_response, target)
+    assert not target.exists()
+    assert not target.with_name("file.nc.part").exists()
+
+
+def test_worker_returns_cancelled_without_requesting(downloader, temp_dir):
+    downloader._cancel.set()
+    with patch("requests.Session.get") as mock_get:
+        _, result = downloader.download_worker((0, "https://test.url/f.nc", temp_dir / "f.nc"))
+    assert result.success is False and result.error == "Cancelled"
+    mock_get.assert_not_called()

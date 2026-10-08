@@ -12,7 +12,6 @@ Fetches the first chunk of one CHESS-MET file, or the whole file with --save.
     pixi run python tests/manual_token_check.py 2000 1 --save   # saves to data/token_test/
 """
 import argparse
-import calendar
 import sys
 from pathlib import Path
 

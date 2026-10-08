@@ -24,9 +24,10 @@ def test_config_defaults():
     assert config.token is None  # conftest removes EIDC_TOKEN
 
 
-@pytest.mark.parametrize("var", VARS)
-def test_validate_vars_accepts_known(var):
-    ChessMetConfig().validate_vars(var)
+def test_validate_vars_accepts_every_known_variable():
+    config = ChessMetConfig()
+    for var in VARS:
+        config.validate_vars(var)
 
 
 @pytest.mark.parametrize("var", ["invalid_var", "", "TAS"])
@@ -45,7 +46,7 @@ def test_validate_years_accepts_range_and_boundaries(start, end):
     (1960, 1970, "before valid range"),
     (2020, 2025, "after valid range"),
     (2010, 2020, "after valid range"),
-    (2010, 2005, r"start_year \(2010\) > end_year \(2005\)"),
+    (2010, 2005, "is after end"),
 ])
 def test_validate_years_rejects(start, end, match):
     with pytest.raises(ValueError, match=match):

@@ -3,6 +3,21 @@ Python package + CLI for downloading CHESS-MET NetCDF data from the UKCEH EIDC c
 
 https://catalogue.ceh.ac.uk/documents/835a50df-e74f-4bfb-b593-804fd61d5eab
 
+## Data
+
+CHESS-MET is a 1 km daily meteorology dataset for Great Britain, stored as one NetCDF file per variable per month.
+Check the dataset page above for the current variables, years and licence; the values below may go out of date.
+
+- **Variables:** `dtr`, `huss`, `precip`, `psurf`, `rlds`, `rsds`, `sfcWind`, `tas`
+- **Period:** 1961–2019. Files are monthly, so `--start`/`--end` accept `YYYY`, `YYYYMM` or `YYYYMMDD` (a day is rounded to its month)
+- **Defaults:** all variables if `--var` is omitted. `--start` is required; `--end` defaults to the end of the `--start` period (`-s 2005` is all of 2005, `-s 200503` is just March 2005). Running `chessmet download` with no options shows the help
+- **Size:** roughly 90–100 MB per file, so one variable for the full period is tens of GB. Check your disk space first.
+
+Files are saved as `<outdir>/<var>/chess-met_<var>_gb_1km_daily_<YYYYMMDD>-<YYYYMMDD>.nc`
+(default `outdir` is `data/chessmet`). Re-running skips files that are already complete, re-downloads truncated ones,
+and `--overwrite` (alias `--no-skip`) forces everything to be downloaded again.
+Files are written as `.part` first and renamed once verified, so an interrupted download (e.g. Ctrl+C) never leaves a
+truncated `.nc` that looks complete. Remove leftovers with `chessmet clean --incomplete-only`.
 
 ## Setup
 
@@ -28,21 +43,75 @@ If `EIDC_TOKEN` is not set and you run in an interactive terminal, the CLI promp
 (hidden input). It is held in memory only and never stored. Username/password authentication is
 no longer supported by the EIDC for programmatic downloads.
 
-### 2) Install with pixi (recommended)
+### 2) Install CLI
+Install with **one** of these (each puts `chessmet` on your PATH in its own isolated environment).
+We recommend [`uv`](https://docs.astral.sh/uv/) or [`pixi`](https://pixi.prefix.dev/latest/); `pipx` also works.
 
 ```bash
-pixi install
-pixi run chessmet --help
+uv tool install git+https://github.com/kaedonkers/chessmet
+pixi global install --git https://github.com/kaedonkers/chessmet
+pipx install git+https://github.com/kaedonkers/chessmet
 ```
 
-### 3) Install with pip
+Remember to run `chessmet` from the folder containing your `.env` (or export `EIDC_TOKEN`).
+
+To update, reinstall to pick up new commits:
 
 ```bash
-pip install -e .
-chessmet --help
+uv tool install --reinstall git+https://github.com/kaedonkers/chessmet
+pixi global install --force-reinstall --git https://github.com/kaedonkers/chessmet
+pipx install --force git+https://github.com/kaedonkers/chessmet
 ```
+
+## CLI usage
+
+```bash
+# Download one variable/year range
+chessmet download --var tas --start 1989 --end 2005
+
+# Download multiple variables in parallel
+chessmet download --vars tas,precip --start 2000 --workers 4   # or: --var tas --var precip
+
+# A single month, or a range of months (a day, e.g. 20000315, is rounded to its month)
+chessmet download --var tas --start 200003
+chessmet download --var tas --start 200003 --end 200105
+
+# Show planned downloads without downloading
+chessmet download --var rsds --start 2000 --end 2001 --dry-run
+
+# Check local file status
+chessmet status --var tas --start 1989 --end 1990
+
+# Clean downloaded files
+chessmet clean --var tas --yes
+chessmet clean --var tas --dry-run   # list what would be removed, delete nothing
+chessmet clean --incomplete-only --dry-run   # only truncated files and leftover .part files
+chessmet clean --var tas --remove-dirs --yes   # also remove the emptied tas/ folder
+chessmet clean --var tas --force --yes   # remove tas/ even if it holds other files
+```
+
+### Messages and log file
+
+Failures are always listed in a summary at the end of a `download`. To see them as they happen
+(these options go **before** the subcommand, not after it):
+
+```bash
+chessmet -v download ...    # warnings and errors (retries, failed files), above the progress bar
+chessmet -vv download ...   # also per-file progress
+chessmet --log-file run.log download ...   # also append timestamped INFO logs to run.log
+```
+
+No log file is written unless you pass `--log-file`. Logs never contain the token.
 
 ## Python usage
+
+The package is also a library. Install it however you prefer:
+
+```bash
+pip install git+https://github.com/kaedonkers/chessmet
+uv add git+https://github.com/kaedonkers/chessmet
+pixi add --pypi "chessmet @ git+https://github.com/kaedonkers/chessmet"
+```
 
 The library never reads `.env` itself; it only looks at real environment variables, or at a token you pass in.
 Only the CLI loads `.env` (from the current directory or a parent).
@@ -70,45 +139,23 @@ for var, files in results.items():
 ```
 
 A rejected token raises no exception from `download_all_vars`; the failure is reported in each result's `error`
-(see the `401`/`403` notes above).
+(see [Authentication](#1-authentication)).
 
-## CLI usage
+## Licence and citation
 
-```bash
-# Download one variable/year range
-chessmet download --var tas --start 1989 --end 2005
+The data are licensed by UKCEH under the [CHESS-met licence](https://eidc.ac.uk/licences/chessmet/plain)
+(accept it once on the dataset page to download). You must cite the dataset in any publication that uses it:
 
-# Download multiple variables in parallel
-chessmet download --var tas --var precip --workers 4
+> Robinson, E. L., Blyth, E. M., Clark, D. B., Comyn-Platt, E., Rudd, A. C., & Wiggins, M. (2023). *Climate hydrology and
+> ecology research support system meteorology dataset for Great Britain (1961-2019) [CHESS-met]*. NERC EDS Environmental
+> Information Data Centre. https://doi.org/10.5285/835a50df-e74f-4bfb-b593-804fd61d5eab
 
-# Show planned downloads without downloading
-chessmet download --var rsds --start 2000 --end 2001 --dry-run
+Acknowledgement text required on publications and presentations:
 
-# Check local file status
-chessmet status --var tas --start 1989 --end 1990
+> "Climate hydrology and ecology research support system meteorology dataset for Great Britain (1961-2019) [CHESS-met]
+> data licensed from UK Centre for Ecology & Hydrology. © Database Right/Copyright UK Centre for Ecology & Hydrology.
+> All rights reserved. Contains material based on Met Éireann data © Met Éireann, Met Office and OS data © Crown copyright
+> and database right 2019 and University of East Anglia Climatic Research Unit © CRU"
 
-# Clean downloaded files
-chessmet clean --var tas --yes
-chessmet clean --var tas --dry-run   # list what would be removed, delete nothing
-chessmet clean --incomplete-only --dry-run   # only truncated files and leftover .part files
-chessmet clean --var tas --remove-dirs --yes   # also remove the emptied tas/ folder
-chessmet clean --var tas --force --yes   # remove tas/ even if it holds other files
-```
+This package is not affiliated with UKCEH.
 
-### Messages and log file
-
-Failures are always listed in a summary at the end of a `download`. To see them as they happen:
-
-```bash
-chessmet -v download ...    # warnings and errors (retries, failed files), above the progress bar
-chessmet -vv download ...   # also per-file progress
-chessmet --log-file run.log download ...   # also append timestamped INFO logs to run.log
-```
-
-No log file is written unless you pass `--log-file`. Logs never contain the token.
-
-You can also run the module directly:
-
-```bash
-python -m chessmet --help
-```

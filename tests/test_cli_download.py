@@ -11,6 +11,22 @@ from unittest.mock import patch
 from chessmet.cli import cli
 from chessmet.download import DownloadResult
 
+# ── arguments ──────────────────────────────────────────────────
+
+@patch("chessmet.cli.ChessMetDownloader.download_all_vars")
+def test_no_arguments_shows_help_and_downloads_nothing(mock_dl, runner):
+    res = runner.invoke(cli, ["download"])
+    assert "Usage:" in res.output and "--start" in res.output
+    mock_dl.assert_not_called()
+
+
+@patch("chessmet.cli.ChessMetDownloader.download_all_vars")
+def test_start_is_required(mock_dl, runner, tmp_path):
+    res = runner.invoke(cli, ["download", "--var", "tas", "-o", str(tmp_path)])
+    assert res.exit_code != 0
+    assert "--start is required" in res.output
+    mock_dl.assert_not_called()
+
 
 # ── token handling ─────────────────────────────────────────────
 
@@ -145,3 +161,23 @@ def test_default_console_is_quiet_and_v_shows_errors(runner, tmp_path, monkeypat
         loud = runner.invoke(cli, ["-v"] + _download_args(tmp_path))
     assert "HTTP 500" not in quiet.output
     assert "HTTP 500" in loud.output
+
+
+def test_vars_accepts_comma_list_repeats_and_alias(runner, tmp_path, monkeypatch):
+    monkeypatch.setenv("EIDC_TOKEN", "pat_abc")
+    with patch("chessmet.cli.ChessMetDownloader.download_all_vars", return_value={}) as m:
+        runner.invoke(cli, ["download", "--vars", "tas,precip", "--var", "rsds,tas", "-s", "2000", "-o", str(tmp_path)])
+    assert m.call_args.kwargs["vars_"] == ["tas", "precip", "rsds"]
+
+
+def test_vars_rejects_unknown_name(runner, tmp_path):
+    res = runner.invoke(cli, ["download", "--vars", "tas,nope", "-s", "2000", "-o", str(tmp_path)])
+    assert res.exit_code == 2 and "nope" in res.output
+
+
+def test_vars_comma_list_works_on_status_and_clean(runner, tmp_path):
+    for cmd in (["status", "-s", "2000"], ["clean", "--dry-run"]):
+        res = runner.invoke(cli, [*cmd, "--vars", "tas,precip", "-o", str(tmp_path)])
+        assert res.exit_code == 0, res.output
+        bad = runner.invoke(cli, [*cmd, "--vars", "nope", "-o", str(tmp_path)])
+        assert bad.exit_code == 2
