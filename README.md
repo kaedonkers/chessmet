@@ -95,6 +95,18 @@ chessmet clean --var tas --remove-dirs --yes   # also remove the emptied tas/ fo
 chessmet clean --var tas --force --yes   # remove tas/ even if it holds other files
 ```
 
+### Messages and log file
+
+Failures are always listed in a summary at the end of a `download`. To see them as they happen:
+
+```bash
+chessmet -v download ...    # warnings and errors (retries, failed files), above the progress bar
+chessmet -vv download ...   # also per-file progress
+chessmet --log-file run.log download ...   # also append timestamped INFO logs to run.log
+```
+
+No log file is written unless you pass `--log-file`. Logs never contain the token.
+
 You can also run the module directly:
 
 ```bash
