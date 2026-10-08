@@ -7,13 +7,13 @@
 CHESS-MET NetCDF Download Utility
 """
 
-import base64
 import calendar
 import concurrent.futures
 import logging
 import os
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Generator, List, Optional, Tuple
 
@@ -41,6 +41,21 @@ VARS = ("dtr", "huss", "precip", "psurf", "rlds", "rsds", "sfcWind", "tas")
 YEARS = (1961, 2019)
 START_DEFAULT = 2000
 END_DEFAULT = 2000
+# Smallest complete monthly file is ~88.8 MB (28-day February); anything smaller is a partial download.
+MIN_COMPLETE_BYTES = 80_000_000
+
+class AuthenticationError(RuntimeError):
+    """Server rejected the credentials (401/403); retrying will not help."""
+
+
+def _env_token() -> Optional[str]:
+    return (os.getenv("EIDC_TOKEN") or "").strip() or None
+
+
+TOKEN_PREFIX = "pat_"
+TOKENS_URL = "https://catalogue.ceh.ac.uk/sso/tokens"
+DATASET_URL = "https://doi.org/10.5285/835a50df-e74f-4bfb-b593-804fd61d5eab"
+
 
 @dataclass
 class ChessMetConfig:
@@ -60,13 +75,12 @@ class ChessMetConfig:
     default_outdir: Path = OUTDIR_DEFAULT
     max_retries: int = 3
     
+    # Preferred: personal access token (EIDC_TOKEN), sent as a Bearer token.
+    token: Optional[str] = field(default_factory=_env_token, repr=False)
     @property
-    def username(self) -> Optional[str]:
-        return os.getenv("EIDC_USERNAME")
-    
-    @property
-    def password(self) -> Optional[str]:
-        return os.getenv("EIDC_PASSWORD")
+    def token_looks_valid(self) -> bool:
+        """EIDC tokens normally start with 'pat_'; used only to warn, never to block."""
+        return bool(self.token) and self.token.startswith(TOKEN_PREFIX)
 
     @property
     def min_year(self) -> int:
@@ -98,30 +112,18 @@ class DownloadResult:
     error: Optional[str] = None
 
 class ChessMetDownloader:
-    """Downloads CHESS-MET NetCDF files from UKCEH EIDC with HTTP Basic Auth."""
+    """Downloads CHESS-MET NetCDF files from UKCEH EIDC using a personal access token."""
     
     def __init__(self, config: Optional[ChessMetConfig] = None):
         self.config = config or ChessMetConfig()
         self._session: Optional[requests.Session] = None
+        self._auth_failed = threading.Event()
     
     @property
     def session(self) -> requests.Session:
         """Lazy-load authenticated session."""
         if self._session is None:
-            if not self.config.username or not self.config.password:
-                raise RuntimeError(
-                    "EIDC credentials not found. Set in .env:\n"
-                    "  EIDC_USERNAME=your_username\n"
-                    "  EIDC_PASSWORD=your_password"
-                )
-            self._session = requests.Session()
-            credentials = f"{self.config.username}:{self.config.password}"
-            encoded = base64.b64encode(credentials.encode()).decode()
-            self._session.headers.update({
-                "Authorization": f"Basic {encoded}",
-                "User-Agent": "chess-met-downloader/1.0",
-                "Accept": "*/*",
-            })
+            self._session = self._create_session_with_auth()
         return self._session
     
     def _build_url(self, var: str, year: int, month: int) -> str:
@@ -129,7 +131,7 @@ class ChessMetDownloader:
         filename = f"chess-met_{var}_gb_1km_daily_{year}{month:02d}01-{year}{month:02d}{last_day}.nc"
         return f"{self.config.base_url}/{var}/{filename}"
     
-    def _file_exists_locally(self, filepath: Path, min_size: int = 10_000_000) -> bool:
+    def _file_exists_locally(self, filepath: Path, min_size: int = MIN_COMPLETE_BYTES) -> bool:
         return filepath.exists() and filepath.stat().st_size >= min_size
     
     def _prepare_filepath(self, outdir: Path, var: str, year: int, month: int) -> Path:
@@ -140,17 +142,30 @@ class ChessMetDownloader:
         return subdir / fname
     
     def _create_session_with_auth(self) -> requests.Session:
-        """Create a fresh authenticated session."""
-        if not self.config.username or not self.config.password:
-            raise RuntimeError("EIDC credentials not found")
+        """Create a fresh session authenticated with the bearer token."""
+        if not self.config.token:
+            raise AuthenticationError(
+                "No EIDC token found. Set EIDC_TOKEN in .env "
+                f"(create one at {TOKENS_URL})."
+            )
         session = requests.Session()
-        credentials = f"{self.config.username}:{self.config.password}"
-        encoded = base64.b64encode(credentials.encode()).decode()
         session.headers.update({
-            "Authorization": f"Basic {encoded}",
             "User-Agent": "chess-met-downloader/1.0",
+            "Accept": "*/*",
         })
+        session.headers["Authorization"] = f"Bearer {self.config.token}"
         return session
+
+    def _auth_error(self, status: int) -> AuthenticationError:
+        if status == 403:
+            return AuthenticationError(
+                "403 — access forbidden. The dataset licence may not have been accepted yet: "
+                f"open {DATASET_URL}, choose 'Download the data' and accept the licence (one-time)."
+            )
+        return AuthenticationError(
+            f"{status} — token rejected. It may have expired or been revoked; "
+            f"create a new personal access token at {TOKENS_URL} and update EIDC_TOKEN."
+        )
     
     def download_worker(
         self,
@@ -160,13 +175,17 @@ class ChessMetDownloader:
         """Worker function with retry and re-authentication."""
         idx, url, filepath = args
         
+        if self._auth_failed.is_set():
+            return (idx, DownloadResult(url=url, filepath=filepath, success=False,
+                                        error="Skipped: authentication failed earlier"))
+        
         for attempt in range(retry_attempts):
             try:
                 session = self._create_session_with_auth()
                 
                 with session.get(url, stream=True, timeout=self.config.timeout_seconds) as response:
-                    if response.status_code == 401:
-                        raise RuntimeError("401 — check EIDC_USERNAME and EIDC_PASSWORD")
+                    if response.status_code in (401, 403):
+                        raise self._auth_error(response.status_code)
 
                     response.raise_for_status()
 
@@ -190,7 +209,11 @@ class ChessMetDownloader:
             except (requests.RequestException, RuntimeError, OSError) as e:
                 error_msg = str(e)
                 
-                if attempt < retry_attempts - 1 and "401" in error_msg:
+                if isinstance(e, AuthenticationError):
+                    self._auth_failed.set()
+                elif attempt < retry_attempts - 1 and isinstance(
+                    e, (requests.ConnectionError, requests.Timeout)
+                ):
                     logger.warning(f"Attempt {attempt + 1}/{retry_attempts}: {filepath.name}")
                     time.sleep(5 * (attempt + 1))  # Exponential backoff
                     continue
@@ -226,6 +249,14 @@ class ChessMetDownloader:
         task_id = progress.add_task(f"[cyan]Downloading {var:<7}", total=total_files)
         
         for url, filepath in urls_and_paths:
+            if self._auth_failed.is_set():
+                results.append(DownloadResult(url=url, filepath=filepath, success=False,
+                                              error="Skipped: authentication failed earlier"))
+                progress.advance(task_id, advance=1)
+                if grand_task is not None:
+                    progress.advance(grand_task, advance=1)
+                continue
+            
             if skip_existing and self._file_exists_locally(filepath):
                 progress.advance(task_id, advance=1)
                 if grand_task is not None:
@@ -238,8 +269,8 @@ class ChessMetDownloader:
             session = self._create_session_with_auth()
             try:
                 with session.get(url, stream=True, timeout=self.config.timeout_seconds) as response:
-                    if response.status_code == 401:
-                        raise RuntimeError("401 — check EIDC_USERNAME and EIDC_PASSWORD")
+                    if response.status_code in (401, 403):
+                        raise self._auth_error(response.status_code)
                     response.raise_for_status()
                     
                     content_type = response.headers.get("Content-Type", "")
@@ -261,6 +292,8 @@ class ChessMetDownloader:
             
             except (requests.RequestException, RuntimeError, OSError) as e:
                 error_msg = str(e)
+                if isinstance(e, AuthenticationError):
+                    self._auth_failed.set()
                 logger.error(f"FAIL: {filepath.name} — {error_msg}")
                 try:
                     filepath.unlink(missing_ok=True)

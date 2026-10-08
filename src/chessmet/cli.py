@@ -7,12 +7,12 @@
 CHESS-MET NetCDF Downloader CLI
 
 Downloads CHESS-MET gridded climate data from UKCEH EIDC catalogue.
-Requires EIDC authentication via credentials in .env file.
+Requires an EIDC personal access token (EIDC_TOKEN in .env). If it is not set
+and the terminal is interactive, you are prompted for it (hidden, never stored).
 
 Usage:
     # Ensure .env contains:
-    # EIDC_USERNAME=your_username
-    # EIDC_PASSWORD=your_password
+    # EIDC_TOKEN=your_personal_access_token
     
     # Run from command line
     chessmet download --var tas --start 2000 --end 2000
@@ -23,6 +23,7 @@ import calendar
 import concurrent.futures
 import logging
 import os
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,7 +47,7 @@ from requests.exceptions import ConnectionError, HTTPError, RequestException, Ti
 from chessmet import __version__
 from chessmet.download import (
     OUTDIR_DEFAULT, VARS, YEARS, START_DEFAULT, END_DEFAULT,
-    ChessMetConfig, ChessMetDownloader, DownloadResult
+    ChessMetConfig, ChessMetDownloader, DownloadResult, MIN_COMPLETE_BYTES, TOKEN_PREFIX, TOKENS_URL
     )
 
 load_dotenv()
@@ -56,6 +57,26 @@ logger = logging.getLogger(__name__)
 # ───────────────────────────────────────────────────────────────
 # Click CLI
 # ───────────────────────────────────────────────────────────────
+
+def _ensure_credentials(ctx, config: ChessMetConfig) -> None:
+    """Use EIDC_TOKEN if set; otherwise prompt for it (kept in memory only)."""
+    if not config.token:
+        if not sys.stdin.isatty():
+            console.print(
+                "[bold red]ERROR:[/bold red] No EIDC_TOKEN set (e.g. in .env) and no terminal "
+                f"available to prompt for one. Create a token at {TOKENS_URL}"
+            )
+            ctx.exit(1)
+        console.print(f"[yellow]No EIDC_TOKEN found.[/yellow] Paste your personal access token "
+                      f"(hidden, not stored). Create one at {TOKENS_URL}")
+        config.token = click.prompt("Token", hide_input=True).strip()
+        if not config.token:
+            console.print("[bold red]ERROR:[/bold red] Empty token.")
+            ctx.exit(1)
+    if not config.token_looks_valid:
+        console.print(f"[bold orange1]WARNING:[/bold orange1] Token does not start with "
+                      f"'{TOKEN_PREFIX}'; EIDC tokens normally do. Downloads may fail with 401.")
+
 
 @click.group()
 @click.option("-v", "--verbose", count=True, help="Increase logging verbosity (-v, -vv).")
@@ -84,9 +105,8 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
     end = end or END_DEFAULT
     
     config = ChessMetConfig(valid_vars=tuple(selected), max_workers=workers)
-    if not config.username or not config.password:
-        console.print("[bold red]ERROR:[/bold red] EIDC credentials not found in .env file.")
-        ctx.exit(1)
+    if not dry_run:
+        _ensure_credentials(ctx, config)
     # if some vars invalid: console.print(warning)
     # if *no* vars valid: console.print(error) and exit
     if start < config.min_year:
@@ -164,7 +184,7 @@ def status(ctx, vars_, start, end, outdir):
             for month in range(1, 13):
                 fp = dl._prepare_filepath(outdir, var, year, month)
                 if fp.exists():
-                    if fp.stat().st_size > 10_000_000:
+                    if fp.stat().st_size >= MIN_COMPLETE_BYTES:
                         present += 1
                     else:
                         incomplete += 1
