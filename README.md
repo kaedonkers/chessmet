@@ -60,6 +60,7 @@ chessmet status --var tas --start 1989 --end 1990
 chessmet clean --var tas --yes
 chessmet clean --var tas --dry-run   # list what would be removed, delete nothing
 chessmet clean --incomplete-only --dry-run   # only truncated files and leftover .part files
+chessmet clean --var tas --remove-dirs --yes   # also remove the emptied tas/ folder
 ```
 
 You can also run the module directly:

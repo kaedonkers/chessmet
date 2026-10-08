@@ -207,47 +207,61 @@ def status(ctx, vars_, start, end, outdir):
 @click.option("--yes", is_flag=True, default=False)
 @click.option("--dry-run", is_flag=True, help="List files that would be removed without deleting them.")
 @click.option("--incomplete-only", is_flag=True, help="Only remove incomplete files (truncated .nc and leftover .part files).")
+@click.option("--remove-dirs", is_flag=True, help="Also remove the variable subfolders from OUTDIR once empty.")
 @click.pass_context
-def clean(ctx, vars_, outdir, yes, dry_run, incomplete_only):
+def clean(ctx, vars_, outdir, yes, dry_run, incomplete_only, remove_dirs):
     """Remove downloaded NetCDF files.
 
-    Without --var, only known variable folders in OUTDIR that contain files are cleaned.
+    Without --var, only known variable folders in OUTDIR are cleaned.
     """
     selected = list(vars_) if vars_ else list(VARS)
 
     targets: List[Path] = []
+    var_dirs: List[Path] = []
     for var in selected:
         var_dir = outdir / var
         if not var_dir.is_dir():
             continue
+        var_dirs.append(var_dir)
         for fp in sorted(var_dir.glob("*.nc")) + sorted(var_dir.glob("*.nc.part")):
             if incomplete_only and fp.suffix == ".nc" and is_complete_netcdf(fp):
                 continue
             targets.append(fp)
 
-    if not targets:
+    # A folder is removable only if nothing but the targeted files would remain
+    removable = [
+        d for d in var_dirs
+        if remove_dirs and set(d.iterdir()) <= {fp for fp in targets if fp.parent == d}
+    ] if remove_dirs else []
+    kept = [d for d in var_dirs if remove_dirs and d not in removable]
+
+    if not targets and not removable:
         console.print("Nothing to clean")
         return
-
-    found_vars = [v for v in selected if any(fp.parent.name == v for fp in targets)]
-    kind = "incomplete" if incomplete_only else "all"
 
     if dry_run:
         for fp in targets:
             console.print(f"Would remove {fp}")
-        console.print(f"[bold yellow]Dry run:[/bold yellow] {len(targets)} files would be removed")
+        for d in removable:
+            console.print(f"Would remove folder {d}")
+        console.print(f"[bold yellow]Dry run:[/bold yellow] {len(targets)} files and {len(removable)} folders would be removed")
         return
 
     if not yes:
-        if not click.confirm(f"Delete {len(targets)} {kind} files for {', '.join(found_vars)} in {outdir}?"):
+        kind = "incomplete" if incomplete_only else "all"
+        names = ", ".join(sorted({fp.parent.name for fp in targets} | {d.name for d in removable}))
+        extra = f" and {len(removable)} folders" if removable else ""
+        if not click.confirm(f"Delete {len(targets)} {kind} files{extra} for {names} in {outdir}?"):
             ctx.exit(0)
 
     for fp in targets:
         fp.unlink()
-    for var in found_vars:
-        try:
-            (outdir / var).rmdir()
-        except OSError:
-            pass
+    for d in removable:
+        d.rmdir()
 
-    console.print(f"[bold green]Removed[/bold green] {len(targets)} files")
+    msg = f"[bold green]Removed[/bold green] {len(targets)} files"
+    if remove_dirs:
+        msg += f" and {len(removable)} folders"
+    console.print(msg)
+    for d in kept:
+        console.print(f"[yellow]Kept {d}[/yellow] (still contains files)")
