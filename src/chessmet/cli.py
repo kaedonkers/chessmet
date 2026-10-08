@@ -92,11 +92,11 @@ def cli(ctx, verbose):
 
 @cli.command()
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
-@click.option("--start", type=int, default=None)
-@click.option("--end", type=int, default=None)
-@click.option("--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
+@click.option("-s", "--start", type=int, default=None)
+@click.option("-e", "--end", type=int, default=None)
+@click.option("-o", "--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
+@click.option("-w", "--workers", type=int, default=1, show_default=True)
 @click.option("--no-skip", "--overwrite", "skip_existing", flag_value=False, default=True)
-@click.option("--workers", type=int, default=1, show_default=True)
 @click.option("--dry-run", is_flag=True)
 @click.pass_context
 def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
@@ -162,9 +162,9 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
 
 @cli.command()
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
-@click.option("--start", type=int, default=None)
-@click.option("--end", type=int, default=None)
-@click.option("--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
+@click.option("-s", "--start", type=int, default=None)
+@click.option("-e", "--end", type=int, default=None)
+@click.option("-o", "--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
 @click.pass_context
 def status(ctx, vars_, start, end, outdir):
     """Check which files exist locally vs. missing."""
@@ -204,12 +204,12 @@ def status(ctx, vars_, start, end, outdir):
 
 @cli.command()
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
-@click.option("--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
-@click.option("--yes", is_flag=True, default=False)
-@click.option("--dry-run", is_flag=True, help="List files that would be removed without deleting them.")
-@click.option("--incomplete-only", is_flag=True, help="Only remove incomplete files (truncated .nc and leftover .part files).")
+@click.option("-o", "--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
+@click.option("-y", "--yes", is_flag=True, default=False)
+@click.option("-i", "--incomplete-only", is_flag=True, help="Only remove incomplete files (truncated .nc and leftover .part files).")
+@click.option("-f", "--force", is_flag=True, help="Remove variable subfolders even if they contain other files (implies --remove-dirs).")
 @click.option("--remove-dirs", is_flag=True, help="Also remove the variable subfolders from OUTDIR once empty.")
-@click.option("--force", is_flag=True, help="Remove variable subfolders even if they contain other files (implies --remove-dirs).")
+@click.option("--dry-run", is_flag=True, help="List files that would be removed without deleting them.")
 @click.pass_context
 def clean(ctx, vars_, outdir, yes, dry_run, incomplete_only, remove_dirs, force):
     """Remove downloaded NetCDF files.
