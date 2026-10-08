@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import requests
+from dotenv import find_dotenv, load_dotenv
 
 from chessmet.download import DATASET_URL, TOKENS_URL, ChessMetConfig, ChessMetDownloader
 
@@ -29,7 +30,8 @@ def main() -> int:
     p.add_argument("--save", action="store_true", help="download the whole file")
     args = p.parse_args()
 
-    cfg = ChessMetConfig()  # chessmet.download loads .env on import
+    load_dotenv(find_dotenv(usecwd=True))  # chessmet no longer loads .env on import
+    cfg = ChessMetConfig()
     if not cfg.token:
         print(f"EIDC_TOKEN is not set (check .env). Create one at {TOKENS_URL}")
         return 2
