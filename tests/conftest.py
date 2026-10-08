@@ -18,9 +18,8 @@ def temp_dir(tmp_path):
 
 @pytest.fixture
 def valid_env_vars(monkeypatch):
-    """Set up valid EIDC credentials for testing."""
-    monkeypatch.setenv("EIDC_USERNAME", "test@example.com")
-    monkeypatch.setenv("EIDC_PASSWORD", "test_password_123")
+    """Set up a valid EIDC token for testing."""
+    monkeypatch.setenv("EIDC_TOKEN", "pat_test_token_abc123")
 
 @pytest.fixture
 def config(valid_env_vars):

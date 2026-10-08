@@ -14,6 +14,7 @@ from chessmet.download import (
     ChessMetDownloader,
     ChessMetConfig,
     DownloadResult,
+    MIN_COMPLETE_BYTES,
 )
 
 class TestDownloadVar:
@@ -41,8 +42,12 @@ class TestDownloadVar:
         filepath.write_bytes(b"x" * 1000)
         assert not downloader._file_exists_locally(filepath)
         
-        # Complete file (>10MB)
-        filepath.write_bytes(b"x" * 15_000_000)
+        # Partial download just under the threshold is still incomplete
+        filepath.write_bytes(b"x" * (MIN_COMPLETE_BYTES - 1))
+        assert not downloader._file_exists_locally(filepath)
+        
+        # Complete file (>= threshold)
+        filepath.write_bytes(b"x" * MIN_COMPLETE_BYTES)
         assert downloader._file_exists_locally(filepath)
     
     def test_prepare_filepath(self, downloader, temp_dir):
@@ -83,7 +88,7 @@ class TestDownloadVar:
         # Pre-create a large file
         filepath = temp_dir / "tas" / "chess-met_tas_gb_1km_daily_19910101-19910131.nc"
         filepath.parent.mkdir(parents=True, exist_ok=True)
-        filepath.write_bytes(b"x" * 15_000_000)
+        filepath.write_bytes(b"x" * MIN_COMPLETE_BYTES)
         
         urls_and_paths = [
             ("https://test.url/file.nc", filepath)
