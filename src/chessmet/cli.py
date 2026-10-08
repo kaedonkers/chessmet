@@ -1,7 +1,7 @@
 # ---
 # created: 28 July 2026
 # author: Lumo2.0, kaedonkers
-# modified: 28 July 2026
+# modified: 08 October 2026
 # ---
 """
 CHESS-MET NetCDF Downloader CLI
@@ -47,7 +47,7 @@ from requests.exceptions import ConnectionError, HTTPError, RequestException, Ti
 from chessmet import __version__
 from chessmet.download import (
     OUTDIR_DEFAULT, VARS, YEARS, START_DEFAULT, END_DEFAULT,
-    ChessMetConfig, ChessMetDownloader, DownloadResult, MIN_COMPLETE_BYTES, TOKEN_PREFIX, TOKENS_URL
+    ChessMetConfig, ChessMetDownloader, DownloadResult, TOKEN_PREFIX, TOKENS_URL, is_complete_netcdf
     )
 
 load_dotenv()
@@ -184,7 +184,7 @@ def status(ctx, vars_, start, end, outdir):
             for month in range(1, 13):
                 fp = dl._prepare_filepath(outdir, var, year, month)
                 if fp.exists():
-                    if fp.stat().st_size >= MIN_COMPLETE_BYTES:
+                    if is_complete_netcdf(fp):
                         present += 1
                     else:
                         incomplete += 1
@@ -212,7 +212,7 @@ def clean(ctx, vars_, outdir, yes):
     for var in selected:
         var_dir = outdir / var
         if var_dir.exists():
-            for fp in list(var_dir.glob("*.nc")):
+            for fp in list(var_dir.glob("*.nc")) + list(var_dir.glob("*.nc.part")):
                 fp.unlink()
                 removed += 1
             try:

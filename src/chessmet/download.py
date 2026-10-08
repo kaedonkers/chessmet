@@ -1,7 +1,7 @@
 # ---
 # created: 28 July 2026
 # author: Lumo2.0, kaedonkers
-# modified: 05 August 2026
+# modified: 08 October 2026
 # ---
 """
 CHESS-MET NetCDF Download Utility
@@ -41,8 +41,36 @@ VARS = ("dtr", "huss", "precip", "psurf", "rlds", "rsds", "sfcWind", "tas")
 YEARS = (1961, 2019)
 START_DEFAULT = 2000
 END_DEFAULT = 2000
-# Smallest complete monthly file is ~88.8 MB (28-day February); anything smaller is a partial download.
-MIN_COMPLETE_BYTES = 80_000_000
+
+_HDF5_SIGNATURE = b"\x89HDF\r\n\x1a\n"
+
+
+def is_complete_netcdf(path: Path) -> bool:
+    """True if `path` is a NetCDF-4/HDF5 file that is not truncated.
+
+    The HDF5 superblock records the intended end-of-file address, so a short
+    file is detected by reading ~64 bytes (no NetCDF library needed).
+    """
+    try:
+        size = path.stat().st_size
+        with open(path, "rb") as f:
+            head = f.read(64)
+    except OSError:
+        return False
+    if head[:8] != _HDF5_SIGNATURE:
+        return False
+    version = head[8]
+    if version in (0, 1):
+        offset_size = head[13]
+        pos = 24 + (4 if version == 1 else 0) + 2 * offset_size  # skip base + free-space addresses
+    elif version in (2, 3):
+        offset_size = head[9]
+        pos = 12 + 2 * offset_size
+    else:
+        return False
+    eof = int.from_bytes(head[pos:pos + offset_size], "little")
+    return eof > 0 and size >= eof
+
 
 class AuthenticationError(RuntimeError):
     """Server rejected the credentials (401/403); retrying will not help."""
@@ -131,8 +159,27 @@ class ChessMetDownloader:
         filename = f"chess-met_{var}_gb_1km_daily_{year}{month:02d}01-{year}{month:02d}{last_day}.nc"
         return f"{self.config.base_url}/{var}/{filename}"
     
-    def _file_exists_locally(self, filepath: Path, min_size: int = MIN_COMPLETE_BYTES) -> bool:
-        return filepath.exists() and filepath.stat().st_size >= min_size
+    def _file_exists_locally(self, filepath: Path) -> bool:
+        """True if a complete (non-truncated) NetCDF file is already present."""
+        return is_complete_netcdf(filepath)
+
+    def _stream_to_file(self, response: requests.Response, filepath: Path) -> int:
+        """Write the response to `<file>.part`, verify its length, then rename into place."""
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        part = filepath.with_name(filepath.name + ".part")
+        try:
+            with open(part, "wb") as f:
+                for chunk in response.iter_content(chunk_size=self.config.chunk_size):
+                    if chunk:
+                        f.write(chunk)
+            written = part.stat().st_size
+            expected = response.headers.get("Content-Length")
+            if expected is not None and expected.isdigit() and written != int(expected):
+                raise OSError(f"Incomplete download: got {written:,} of {int(expected):,} bytes")
+            part.replace(filepath)
+            return written
+        finally:
+            part.unlink(missing_ok=True)
     
     def _prepare_filepath(self, outdir: Path, var: str, year: int, month: int) -> Path:
         subdir = outdir / var
@@ -193,14 +240,8 @@ class ChessMetDownloader:
                     if "text/html" in content_type:
                         raise RuntimeError("Server returned HTML login page")
 
-                    filepath.parent.mkdir(parents=True, exist_ok=True)
+                    actual_size = self._stream_to_file(response, filepath)
 
-                    with open(filepath, "wb") as f:
-                        for chunk in response.iter_content(chunk_size=self.config.chunk_size):
-                            if chunk:
-                                f.write(chunk)
-
-                actual_size = filepath.stat().st_size
                 session.close()
                 return (idx, DownloadResult(
                     url=url, filepath=filepath, success=True, size_bytes=actual_size
@@ -218,10 +259,6 @@ class ChessMetDownloader:
                     time.sleep(5 * (attempt + 1))  # Exponential backoff
                     continue
                 
-                try:
-                    filepath.unlink(missing_ok=True)
-                except OSError:
-                    pass
                 
                 return (idx, DownloadResult(url=url, filepath=filepath, success=False, error=error_msg))
         
@@ -277,13 +314,7 @@ class ChessMetDownloader:
                     if "text/html" in content_type:
                         raise RuntimeError("Server returned HTML login page")
                     
-                    filepath.parent.mkdir(parents=True, exist_ok=True)
-                    with open(filepath, "wb") as f:
-                        for chunk in response.iter_content(chunk_size=self.config.chunk_size):
-                            if chunk:
-                                f.write(chunk)
-                    
-                    actual_size = filepath.stat().st_size
+                    actual_size = self._stream_to_file(response, filepath)
                     progress.advance(task_id, advance=1)
                     if grand_task is not None:
                         progress.advance(grand_task, advance=1)
@@ -295,10 +326,6 @@ class ChessMetDownloader:
                 if isinstance(e, AuthenticationError):
                     self._auth_failed.set()
                 logger.error(f"FAIL: {filepath.name} — {error_msg}")
-                try:
-                    filepath.unlink(missing_ok=True)
-                except OSError:
-                    pass
                 results.append(DownloadResult(url=url, filepath=filepath, success=False, error=error_msg))
             
             time.sleep(self.config.rate_limit_delay)
