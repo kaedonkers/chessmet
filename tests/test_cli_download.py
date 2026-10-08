@@ -11,7 +11,6 @@ from unittest.mock import patch
 from chessmet.cli import cli
 from chessmet.download import DownloadResult
 
-
 # ── arguments ──────────────────────────────────────────────────
 
 @patch("chessmet.cli.ChessMetDownloader.download_all_vars")
@@ -174,3 +173,11 @@ def test_vars_accepts_comma_list_repeats_and_alias(runner, tmp_path, monkeypatch
 def test_vars_rejects_unknown_name(runner, tmp_path):
     res = runner.invoke(cli, ["download", "--vars", "tas,nope", "-s", "2000", "-o", str(tmp_path)])
     assert res.exit_code == 2 and "nope" in res.output
+
+
+def test_vars_comma_list_works_on_status_and_clean(runner, tmp_path):
+    for cmd in (["status", "-s", "2000"], ["clean", "--dry-run"]):
+        res = runner.invoke(cli, [*cmd, "--vars", "tas,precip", "-o", str(tmp_path)])
+        assert res.exit_code == 0, res.output
+        bad = runner.invoke(cli, [*cmd, "--vars", "nope", "-o", str(tmp_path)])
+        assert bad.exit_code == 2
