@@ -92,7 +92,7 @@ def test_dry_run_lists_only_requested_months(runner, tmp_path):
 def test_status_accepts_month_formats(runner, tmp_path):
     res = runner.invoke(cli, ["status", "--var", "tas", "-s", "20000315", "-e", "200005", "-o", str(tmp_path)])
     assert res.exit_code == 0
-    assert "Period: 2000-03 – 2000-05" in res.output
+    assert "Period: 2000-03-01 – 2000-05-31" in res.output
     assert "3 missing" in res.output
 
 

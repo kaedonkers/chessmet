@@ -36,4 +36,4 @@ def test_status_clamps_years_with_warning(runner, tmp_path):
     res = runner.invoke(cli, ["status", "--var", "tas", "-s", "1900", "-e", "2100", "-o", str(tmp_path)])
     assert res.exit_code == 0
     assert "start=1961" in res.output and "end=2019" in res.output
-    assert "Period: 1961-01 – 2019-12" in res.output
+    assert "Period: 1961-01-01 – 2019-12-31" in res.output
