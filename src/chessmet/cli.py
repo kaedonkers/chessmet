@@ -18,6 +18,7 @@ Usage:
     chessmet download --var tas --start 2000 --end 2000
 """
 
+import calendar
 import logging
 import shutil
 import sys
@@ -156,7 +157,8 @@ def _resolve_period(config, start, end, verb):
 
 
 def _fmt_period(first_ym, last_ym):
-    return f"{first_ym[0]}-{first_ym[1]:02d} – {last_ym[0]}-{last_ym[1]:02d}"
+    last_day = calendar.monthrange(*last_ym)[1]
+    return f"{first_ym[0]}-{first_ym[1]:02d}-01 – {last_ym[0]}-{last_ym[1]:02d}-{last_day:02d}"
 
 
 @click.group()
