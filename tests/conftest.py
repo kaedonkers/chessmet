@@ -54,14 +54,15 @@ def downloader(config):
 
 @pytest.fixture
 def mock_response():
-    """Mock requests.Response with NetCDF-like content."""
+    """Mock requests.Response streaming a few small chunks."""
+    chunks = [b"x" * 1024 for _ in range(3)]
     response = MagicMock()
     response.status_code = 200
     response.headers = {
         "Content-Type": "application/octet-stream",
-        "Content-Length": str(65536 * 153),
+        "Content-Length": str(sum(len(c) for c in chunks)),
     }
-    response.iter_content.return_value = [b"x" * 65536 for _ in range(153)]  # ~10MB
+    response.iter_content.return_value = chunks
     response.__enter__.return_value = response
     response.__exit__.return_value = False
     return response
