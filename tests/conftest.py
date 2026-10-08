@@ -94,8 +94,6 @@ def config(token_env):
     return ChessMetConfig(
         valid_vars=("precip", "tas", "rsds"),
         valid_years=(1961, 2019),
-        default_start_year=1991,
-        default_end_year=1992,
         max_workers=1,
         timeout_seconds=5,
         rate_limit_delay=0,

@@ -48,7 +48,7 @@ from chessmet import __version__
 # `console` is shared with download.py: the progress bar and the log handler must use the same Console,
 # otherwise log lines are drawn over the bar instead of above it.
 from chessmet.download import (
-    OUTDIR_DEFAULT, VARS, YEARS, START_DEFAULT, END_DEFAULT,
+    OUTDIR_DEFAULT, VARS, YEARS,
     ChessMetConfig, ChessMetDownloader, DownloadResult, TOKEN_PREFIX, TOKENS_URL, console, is_complete_netcdf
     )
 
@@ -117,10 +117,10 @@ def cli(ctx, verbose, log_file):
     load_dotenv(find_dotenv(usecwd=True))
     _configure_logging(verbose, log_file)
 
-@cli.command()
+@cli.command(no_args_is_help=True)
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)
-@click.option("-s", "--start", type=int, default=None)
-@click.option("-e", "--end", type=int, default=None)
+@click.option("-s", "--start", type=int, default=None, help="First year (required).")
+@click.option("-e", "--end", type=int, default=None, help="Last year. Defaults to --start.")
 @click.option("-o", "--outdir", type=click.Path(file_okay=False, path_type=Path), default=OUTDIR_DEFAULT, show_default=True)
 @click.option("-w", "--workers", type=int, default=1, show_default=True)
 @click.option("--no-skip", "--overwrite", "skip_existing", flag_value=False, default=True)
@@ -129,9 +129,10 @@ def cli(ctx, verbose, log_file):
 def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
     """Download monthly NetCDF files for one or more variables."""
     selected = list(vars_) if vars_ else VARS
-    start = start or START_DEFAULT
-    end = end or END_DEFAULT
-    
+    if start is None:
+        raise click.UsageError("--start is required (e.g. --start 2000).")
+    end = start if end is None else end
+
     config = ChessMetConfig(valid_vars=tuple(selected), max_workers=workers)
     if not dry_run:
         _ensure_credentials(ctx, config)
@@ -153,7 +154,7 @@ def download(ctx, vars_, start, end, outdir, skip_existing, workers, dry_run):
         console.print("\n[yellow][DRY RUN][/yellow]")
         dl = ChessMetDownloader(config=config)
         for var in selected:
-            for year in range(start or 2000, (end or 2000) + 1):
+            for year in range(start, end + 1):
                 for month in range(1, 13):
                     filepath = dl._prepare_filepath(outdir, var, year, month)
                     status = "[dim]SKIP[/dim]" if dl._file_exists_locally(filepath) else "[green]DOWNLOAD[/green]"

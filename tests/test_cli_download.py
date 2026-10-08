@@ -12,6 +12,31 @@ from chessmet.cli import cli
 from chessmet.download import DownloadResult
 
 
+# ── arguments ──────────────────────────────────────────────────
+
+@patch("chessmet.cli.ChessMetDownloader.download_all_vars")
+def test_no_arguments_shows_help_and_downloads_nothing(mock_dl, runner):
+    res = runner.invoke(cli, ["download"])
+    assert "Usage:" in res.output and "--start" in res.output
+    mock_dl.assert_not_called()
+
+
+@patch("chessmet.cli.ChessMetDownloader.download_all_vars")
+def test_start_is_required(mock_dl, runner, tmp_path):
+    res = runner.invoke(cli, ["download", "--var", "tas", "-o", str(tmp_path)])
+    assert res.exit_code != 0
+    assert "--start is required" in res.output
+    mock_dl.assert_not_called()
+
+
+@patch("chessmet.cli.ChessMetDownloader.download_all_vars", return_value={})
+def test_end_defaults_to_start(mock_dl, runner, tmp_path, monkeypatch):
+    monkeypatch.setenv("EIDC_TOKEN", "pat_test")
+    res = runner.invoke(cli, ["download", "--var", "tas", "-s", "2005", "-o", str(tmp_path)])
+    assert res.exit_code == 0
+    assert mock_dl.call_args.kwargs["start_year"] == mock_dl.call_args.kwargs["end_year"] == 2005
+
+
 # ── token handling ─────────────────────────────────────────────
 
 def _download_args(tmp_path):

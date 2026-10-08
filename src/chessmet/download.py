@@ -39,8 +39,6 @@ logger = logging.getLogger(__name__)
 OUTDIR_DEFAULT = Path("data/chessmet")
 VARS = ("dtr", "huss", "precip", "psurf", "rlds", "rsds", "sfcWind", "tas")
 YEARS = (1961, 2019)
-START_DEFAULT = 2000
-END_DEFAULT = 2000
 
 _HDF5_SIGNATURE = b"\x89HDF\r\n\x1a\n"
 
@@ -93,8 +91,6 @@ class ChessMetConfig:
     base_url: str = field(default_factory=lambda: os.getenv("EIDC_BASE_URL", DEFAULT_BASE_URL))
     valid_vars: Tuple[str, ...] = VARS
     valid_years: Tuple[int, int] = YEARS
-    default_start_year: int = START_DEFAULT
-    default_end_year: int = END_DEFAULT
     timeout_seconds: int = 120
     max_workers: int = 2
     chunk_size: int = 65536
@@ -383,7 +379,7 @@ class ChessMetDownloader:
     def download_var(
         self,
         var: str,
-        start_year: Optional[int] = None,
+        start_year: int,
         end_year: Optional[int] = None,
         outdir: Path = OUTDIR_DEFAULT,
         skip_existing: bool = True,
@@ -393,8 +389,7 @@ class ChessMetDownloader:
         grand_task: Optional[int] = None,
     ) -> List[DownloadResult]:
         """Download all monthly files for a single variable."""
-        start_year = start_year or self.config.default_start_year
-        end_year = end_year or self.config.default_end_year
+        end_year = start_year if end_year is None else end_year
         
         self.config.validate_vars(var)
         self.config.validate_years(start_year, end_year)
@@ -420,8 +415,8 @@ class ChessMetDownloader:
         
     def download_all_vars(
         self,
-        vars_: Optional[List[str]] = None,
-        start_year: Optional[int] = None,
+        vars_: Optional[List[str]],
+        start_year: int,
         end_year: Optional[int] = None,
         outdir: Path = OUTDIR_DEFAULT,
         skip_existing: bool = True,
@@ -430,8 +425,7 @@ class ChessMetDownloader:
     ) -> dict:
         """Download multiple variables with grand progress bar."""
         vars_ = vars_ or list(self.config.valid_vars)
-        start_year = start_year or self.config.default_start_year
-        end_year = end_year or self.config.default_end_year
+        end_year = start_year if end_year is None else end_year
         results = {}
         
         # Count ALL files that need downloading

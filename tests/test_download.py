@@ -126,6 +126,13 @@ def test_download_all_vars(mock_get, downloader, temp_dir, mock_response):
 
 
 @patch("requests.Session.get")
+def test_end_year_defaults_to_start_year(mock_get, downloader, temp_dir, mock_response):
+    mock_get.return_value = mock_response
+    results = downloader.download_all_vars(vars_=["tas"], start_year=1991, outdir=temp_dir, parallel=False)
+    assert len(results["tas"]) == 12
+
+
+@patch("requests.Session.get")
 def test_parallel_vs_serial_same_results(mock_get, downloader, temp_dir, mock_response):
     """Test parallel downloads produce same results as serial."""
     mock_get.return_value = mock_response
