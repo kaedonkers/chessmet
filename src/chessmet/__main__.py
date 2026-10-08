@@ -1,7 +1,7 @@
 # ---
 # created: 28 July 2026
 # author: Lumo2.0, kaedonkers
-# modified: 28 July 2026
+# modified: 08 October 2026
 # ---
 """Module entry-point for `python -m chessmet`."""
 
