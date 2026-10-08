@@ -7,7 +7,7 @@
 name = "chessmet"
 authors = [{name = "Kevin Donkers", email = "k.donkers@exeter.ac.uk"}]
 requires-python = ">= 3.11"
-dynamic = ["version"]
+version = "0.2.0"
 dependencies = [
     "requests",
     "python-dotenv",
