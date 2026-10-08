@@ -32,7 +32,7 @@ from typing import Generator, List, Optional, Tuple
 import click
 import requests
 from dotenv import find_dotenv, load_dotenv
-from rich.console import Console
+from rich.logging import RichHandler
 from rich.progress import (
     BarColumn,
     Progress,
@@ -45,12 +45,13 @@ from rich.progress import (
 from requests.exceptions import ConnectionError, HTTPError, RequestException, Timeout
 
 from chessmet import __version__
+# `console` is shared with download.py: the progress bar and the log handler must use the same Console,
+# otherwise log lines are drawn over the bar instead of above it.
 from chessmet.download import (
     OUTDIR_DEFAULT, VARS, YEARS, START_DEFAULT, END_DEFAULT,
-    ChessMetConfig, ChessMetDownloader, DownloadResult, TOKEN_PREFIX, TOKENS_URL, is_complete_netcdf
+    ChessMetConfig, ChessMetDownloader, DownloadResult, TOKEN_PREFIX, TOKENS_URL, console, is_complete_netcdf
     )
 
-console = Console()
 logger = logging.getLogger(__name__)
 
 # ───────────────────────────────────────────────────────────────
@@ -77,18 +78,44 @@ def _ensure_credentials(ctx, config: ChessMetConfig) -> None:
                       f"'{TOKEN_PREFIX}'; EIDC tokens normally do. Downloads may fail with 401.")
 
 
+# Console verbosity by number of -v flags. Failures are always listed in the end-of-run
+# summary, so by default nothing is logged to the console (it would break the progress bar).
+_CONSOLE_LEVELS = {0: logging.CRITICAL, 1: logging.WARNING, 2: logging.INFO}
+
+
+def _configure_logging(verbose: int, log_file: Optional[Path]) -> None:
+    """Console logging goes through rich (above the progress bar); --log-file records INFO+."""
+    pkg_logger = logging.getLogger("chessmet")
+    for handler in list(pkg_logger.handlers):  # the CLI can run more than once per process
+        pkg_logger.removeHandler(handler)
+        handler.close()
+
+    console_handler = RichHandler(console=console, show_path=False, rich_tracebacks=False)
+    console_handler.setLevel(_CONSOLE_LEVELS.get(verbose, logging.DEBUG))
+    pkg_logger.addHandler(console_handler)
+
+    if log_file is not None:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(logging.DEBUG if verbose >= 3 else logging.INFO)
+        file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        pkg_logger.addHandler(file_handler)
+
+    pkg_logger.setLevel(logging.DEBUG)  # handlers do the filtering
+
+
 @click.group()
-@click.option("-v", "--verbose", count=True, help="Increase logging verbosity (-v, -vv).")
+@click.option("-v", "--verbose", count=True,
+              help="Show warnings and errors as they happen (-v), progress (-vv), debug (-vvv).")
+@click.option("--log-file", type=click.Path(dir_okay=False, path_type=Path), default=None,
+              help="Also append INFO-level logs (with timestamps) to this file. Off by default.")
 @click.version_option(version=__version__, prog_name="chessmet")
 @click.pass_context
-def cli(ctx, verbose):
+def cli(ctx, verbose, log_file):
     """Download CHESS-MET NetCDF files from UKCEH EIDC."""
     ctx.ensure_object(dict)
     # Explicit and cwd-only: never searches the package's own parent directories
     load_dotenv(find_dotenv(usecwd=True))
-    level = logging.WARNING if verbose == 0 else (logging.INFO if verbose == 1 else logging.DEBUG)
-    logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s", level=level, force=True)
-    ctx.obj["log_level"] = level
+    _configure_logging(verbose, log_file)
 
 @cli.command()
 @click.option("--var", "vars_", type=click.Choice(VARS), multiple=True)

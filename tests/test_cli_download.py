@@ -106,3 +106,42 @@ def test_failed_downloads_are_summarised(runner, tmp_path, monkeypatch):
     assert "1 succeeded, 1 failed" in res.output
     assert "tas/bad.nc" in res.output and "HTTP 500" in res.output
     assert "ok.nc" not in res.output
+
+
+# ── logging ────────────────────────────────────────────────────
+
+def test_log_file_is_not_created_by_default(runner, tmp_path):
+    runner.invoke(cli, _download_args(tmp_path) + ["--dry-run"])
+    assert not list(tmp_path.glob("*.log"))
+
+
+def test_log_file_records_failures_but_never_the_token(runner, tmp_path, monkeypatch):
+    import logging
+    monkeypatch.setenv("EIDC_TOKEN", "pat_secret123")
+    log = tmp_path / "run.log"
+
+    def fake_download(self, **kwargs):
+        logging.getLogger("chessmet.download").error("FAIL: a.nc — HTTP 500")
+        return {}
+
+    with patch("chessmet.cli.ChessMetDownloader.download_all_vars", fake_download):
+        res = runner.invoke(cli, ["--log-file", str(log)] + _download_args(tmp_path))
+    assert res.exit_code == 0
+    text = log.read_text()
+    assert "[ERROR] FAIL: a.nc — HTTP 500" in text
+    assert "pat_secret123" not in text and "pat_secret123" not in res.output
+
+
+def test_default_console_is_quiet_and_v_shows_errors(runner, tmp_path, monkeypatch):
+    import logging
+    monkeypatch.setenv("EIDC_TOKEN", "pat_abc")
+
+    def fake_download(self, **kwargs):
+        logging.getLogger("chessmet.download").error("FAIL: a.nc — HTTP 500")
+        return {}
+
+    with patch("chessmet.cli.ChessMetDownloader.download_all_vars", fake_download):
+        quiet = runner.invoke(cli, _download_args(tmp_path))
+        loud = runner.invoke(cli, ["-v"] + _download_args(tmp_path))
+    assert "HTTP 500" not in quiet.output
+    assert "HTTP 500" in loud.output
