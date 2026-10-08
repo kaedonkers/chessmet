@@ -1,5 +1,5 @@
 # chessmet
-Python package + CLI for downloading CHESS-MET NetCDF data from the UKCEH EIDC catalogue using authenticated URL requests.
+CLI & Python package for downloading CHESS-MET NetCDF data from the UKCEH EIDC catalogue using authenticated URL requests.
 
 https://catalogue.ceh.ac.uk/documents/835a50df-e74f-4bfb-b593-804fd61d5eab
 
@@ -45,7 +45,7 @@ no longer supported by the EIDC for programmatic downloads.
 
 ### 2) Install CLI
 Install with **one** of these (each puts `chessmet` on your PATH in its own isolated environment).
-We recommend [`uv`](https://docs.astral.sh/uv/) or [`pixi`](https://pixi.prefix.dev/latest/); `pipx` also works.
+We recommend [`uv`](https://docs.astral.sh/uv/); `pixi` and `pipx` also work.
 
 ```bash
 uv tool install git+https://github.com/kaedonkers/chessmet
